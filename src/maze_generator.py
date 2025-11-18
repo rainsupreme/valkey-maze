@@ -4,12 +4,17 @@ from src.triangular_grid import TriangularGrid
 
 
 class MazeGenerator:
-    def __init__(self, hex_side):
+    def __init__(self, hex_side, center_hex_radius=0):
         self.grid = TriangularGrid(0, 0, hexagonal=True, hex_side=hex_side)
+        self.radius = hex_side
+        self.center_hex_radius = center_hex_radius
 
     def generate(self):
         """Generate maze using iterative backtracking"""
-        start_cell = random.choice(list(self.grid.cells.values()))
+        if self.center_hex_radius > 0:
+            self._create_open_center()
+        
+        start_cell = random.choice([c for c in self.grid.cells.values() if not c.visited])
         stack = [start_cell]
         start_cell.visited = True
 
@@ -25,6 +30,26 @@ class MazeGenerator:
                 stack.append(neighbor)
             else:
                 stack.pop()
+    
+    def _create_open_center(self):
+        """Create fully connected hexagon in center"""
+        center_row = self.grid.rows / 2 - 0.5
+        
+        center_cells = []
+        for cell in self.grid.cells.values():
+            vertical_distance_from_center = abs(cell.row - center_row) - 0.5
+            if vertical_distance_from_center >= self.center_hex_radius:
+                continue
+            side_offset = (self.radius - self.center_hex_radius)*2 + vertical_distance_from_center
+            if cell.col >= side_offset and cell.col < self.grid.cols - side_offset:
+                center_cells.append(cell)
+        
+        for cell in center_cells:
+            cell.visited = True
+            for neighbor in cell.neighbors:
+                if neighbor in center_cells:
+                    cell.passages.add(neighbor)
+                    neighbor.passages.add(cell)
 
     def render_maze(self, filename, cell_size=30, stroke_width=3):
         """Render maze by drawing walls where there are no passages"""
