@@ -14,7 +14,19 @@ class MazeGenerator:
         if self.center_hex_radius > 0:
             self._create_open_center()
         
-        start_cell = random.choice([c for c in self.grid.cells.values() if not c.visited])
+        # random start
+        # start_cell = random.choice([c for c in self.grid.cells.values() if not c.visited])
+
+        # connect to valkey logo
+        row = int(self.grid.rows / 2 + self.center_hex_radius/2)
+        column = int(self.grid.cols / 2)
+        start_cell = self.grid.get_cell((row, column))
+        while True:
+            column += 1
+            next = self.grid.get_cell((row, column))
+            if not next.visited:
+                break
+            start_cell = next
         stack = [start_cell]
         start_cell.visited = True
 
