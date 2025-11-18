@@ -8,20 +8,23 @@ class MazeGenerator:
         self.grid = TriangularGrid(0, 0, hexagonal=True, hex_side=hex_side)
 
     def generate(self):
-        """Generate maze using recursive backtracking"""
+        """Generate maze using iterative backtracking"""
         start_cell = random.choice(list(self.grid.cells.values()))
-        self._carve(start_cell)
+        stack = [start_cell]
+        start_cell.visited = True
 
-    def _carve(self, cell):
-        cell.visited = True
-        neighbors = list(cell.neighbors)
-        random.shuffle(neighbors)
-
-        for neighbor in neighbors:
-            if not neighbor.visited:
+        while stack:
+            cell = stack[-1]
+            neighbors = [n for n in cell.neighbors if not n.visited]
+            
+            if neighbors:
+                neighbor = random.choice(neighbors)
+                neighbor.visited = True
                 cell.passages.add(neighbor)
                 neighbor.passages.add(cell)
-                self._carve(neighbor)
+                stack.append(neighbor)
+            else:
+                stack.pop()
 
     def render_maze(self, filename, cell_size=30, stroke_width=3):
         """Render maze by drawing walls where there are no passages"""
