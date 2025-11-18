@@ -70,12 +70,12 @@ def test_upward_triangle_neighbors():
     # Create a larger grid to properly test neighbors
     grid = TriangularGrid(5, 5)
     
-    # Test upward triangle at (2, 2) - should connect to (1,2), (2,1), (2,3)
+    # Test upward triangle at (2, 2) - should connect to (3,2), (2,1), (2,3)
     cell = grid.get_cell((2, 2))
     assert cell.is_upward
     
     neighbor_coords = {n.coord for n in cell.neighbors}
-    expected_coords = {(1, 2), (2, 1), (2, 3)}
+    expected_coords = {(3, 2), (2, 1), (2, 3)}
     assert neighbor_coords == expected_coords
 
 
@@ -83,12 +83,12 @@ def test_downward_triangle_neighbors():
     # Create a larger grid to properly test neighbors
     grid = TriangularGrid(5, 5)
     
-    # Test downward triangle at (1, 2) - should connect to (2,2), (1,1), (1,3)
+    # Test downward triangle at (1, 2) - should connect to (0,2), (1,1), (1,3)
     cell = grid.get_cell((1, 2))
     assert not cell.is_upward
     
     neighbor_coords = {n.coord for n in cell.neighbors}
-    expected_coords = {(2, 2), (1, 1), (1, 3)}
+    expected_coords = {(0, 2), (1, 1), (1, 3)}
     assert neighbor_coords == expected_coords
 
 
@@ -116,3 +116,38 @@ def test_get_position(triangular_grid):
 def test_get_position_invalid_coord(triangular_grid):
     pos = triangular_grid.get_position((10, 10))
     assert pos is None
+
+
+def test_max_three_neighbors():
+    """Ensure no cell has more than 3 neighbors in a uniform grid"""
+    grid = TriangularGrid(10, 10)
+    for coord, cell in grid.cells.items():
+        assert len(cell.neighbors) <= 3, f"Cell {coord} has {len(cell.neighbors)} neighbors"
+
+
+def test_interior_cells_have_three_neighbors():
+    """Interior cells should have exactly 3 neighbors"""
+    grid = TriangularGrid(10, 10)
+    interior_cell = grid.get_cell((5, 5))
+    assert len(interior_cell.neighbors) == 3
+
+
+def test_neighbor_symmetry():
+    """If A is a neighbor of B, then B must be a neighbor of A"""
+    grid = TriangularGrid(10, 10)
+    for coord, cell in grid.cells.items():
+        for neighbor in cell.neighbors:
+            assert cell in neighbor.neighbors, f"Asymmetric neighbor relationship between {coord} and {neighbor.coord}"
+
+
+def test_upward_connects_to_next_row():
+    """Upward triangles should connect to row+1, downward to row-1"""
+    grid = TriangularGrid(10, 10)
+    for coord, cell in grid.cells.items():
+        cross_row_neighbors = [n for n in cell.neighbors if n.row != cell.row]
+        if cell.is_upward:
+            for neighbor in cross_row_neighbors:
+                assert neighbor.row == cell.row + 1, f"Upward cell {coord} connects to row {neighbor.row}, expected {cell.row + 1}"
+        else:
+            for neighbor in cross_row_neighbors:
+                assert neighbor.row == cell.row - 1, f"Downward cell {coord} connects to row {neighbor.row}, expected {cell.row - 1}"

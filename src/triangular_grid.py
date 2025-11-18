@@ -79,9 +79,9 @@ class TriangularGrid:
         row, col = cell.row, cell.col
         
         if cell.is_upward:
-            neighbor_coords = [(row-1, col), (row, col-1), (row, col+1)]
-        else:
             neighbor_coords = [(row+1, col), (row, col-1), (row, col+1)]
+        else:
+            neighbor_coords = [(row-1, col), (row, col-1), (row, col+1)]
         
         for coord in neighbor_coords:
             if coord in self.cells:
@@ -115,6 +115,8 @@ class TriangularGrid:
         for coord, cell in self.cells.items():
             self._draw_triangle(dwg, cell, cell_size, stroke_width)
         
+        self._draw_connections(dwg, cell_size, stroke_width)
+        
         dwg.save()
     
     def _draw_triangle(self, dwg, cell, cell_size, stroke_width):
@@ -142,3 +144,28 @@ class TriangularGrid:
                            fill=self.BACKGROUND_COLOR, 
                            stroke=self.FOREGROUND_COLOR, 
                            stroke_width=stroke_width))
+    
+    def _get_center(self, cell, cell_size):
+        """Get the center point of a triangle"""
+        x, y = cell.get_position()
+        x *= cell_size
+        y *= cell_size
+        height = cell_size * 0.866
+        
+        if cell.is_upward:
+            return (x + cell_size/2, y + height * 2/3)
+        else:
+            return (x + cell_size/2, y + height * 1/3)
+    
+    def _draw_connections(self, dwg, cell_size, stroke_width):
+        """Draw red lines between connected cells"""
+        drawn = set()
+        for coord, cell in self.cells.items():
+            for neighbor in cell.neighbors:
+                pair = tuple(sorted([coord, neighbor.coord]))
+                if pair not in drawn:
+                    x1, y1 = self._get_center(cell, cell_size)
+                    x2, y2 = self._get_center(neighbor, cell_size)
+                    dwg.add(dwg.line((x1, y1), (x2, y2),
+                                    stroke='red', stroke_width=stroke_width))
+                    drawn.add(pair)
