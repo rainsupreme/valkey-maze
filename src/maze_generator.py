@@ -92,28 +92,61 @@ class MazeGenerator:
                     cell.passages.add(neighbor)
                     neighbor.passages.add(cell)
 
-    def render_maze(self, filename, cell_size=30, stroke_width=3, arrow_size=10, margin=40):
+    def render_maze(self, filename, cell_size=30, stroke_width=3, arrow_size=10, margin=40, logo_svg=None, logo_color='black'):
         """Render maze by drawing walls where there are no passages"""
+        stretch = 1.03
+        self.stretch = stretch
+
         maze_width = self.grid.cols * cell_size * 0.5 + cell_size * 0.5
         maze_height = self.grid.rows * cell_size * 0.866
-        width = maze_width + 2 * margin
-        height = maze_height + 2 * margin
+        width = maze_height + 2 * margin
+        height = (maze_width + 2 * margin) * stretch
 
         dwg = svgwrite.Drawing(filename, size=(width, height))
         dwg.add(dwg.rect((0, 0), (width, height), fill="white"))
 
+        # Create transform group for rotation and scaling
+        transform = f"translate({width/2},{height/2}) rotate({90}) scale({stretch},{1.0}) translate({-(maze_width + 2 * margin)/2},{-width/2})"
+        g = dwg.g(transform=transform)
+
         for cell in self.grid.cells.values():
-            self._draw_walls(dwg, cell, cell_size, stroke_width, margin)
+            self._draw_walls(dwg, g, cell, cell_size, stroke_width, margin)
 
-        self._draw_exit_arrow(dwg, cell_size, arrow_size, stroke_width, margin)
+        self._draw_exit_arrow(dwg, g, cell_size, arrow_size, stroke_width, margin)
 
+        dwg.add(g)
+        
+        if logo_svg and self.center_hex_radius > 0:
+            self._add_logo(dwg, logo_svg, width, height, self.center_hex_radius, cell_size, stretch, logo_color)
+        
         dwg.save()
+
+    def _add_logo(self, dwg, logo_svg, width, height, center_hex_radius, cell_size, stretch, logo_color):
+        """Extract path from logo SVG and center it in the maze"""
+        import xml.etree.ElementTree as ET
+        
+        tree = ET.parse(logo_svg)
+        root = tree.getroot()
+        
+        # Find the path element
+        path_elem = root.find('.//{http://www.w3.org/2000/svg}path')
+        
+        if path_elem is not None:
+            path_d = path_elem.get('d')
+            fill = logo_color
+            center_x = width / 2
+            center_y = height / 2
+            
+            # Scale logo to match inner hexagon radius (original viewBox is 64x73)
+            hex_diameter = center_hex_radius * cell_size * 2
+            scale = hex_diameter / 70
+            dwg.add(dwg.path(d=path_d, fill=fill, transform=f'translate({center_x - 32*scale},{center_y - 36.5*scale*stretch}) scale({scale},{scale*stretch})'))
 
     def render_debug(self, filename, cell_size=30, stroke_width=4):
         """Render debug view showing grid structure"""
         self.grid.render_svg(filename, cell_size, stroke_width)
 
-    def _draw_exit_arrow(self, dwg, cell_size, arrow_size, stroke_width, margin):
+    def _draw_exit_arrow(self, dwg, g, cell_size, arrow_size, stroke_width, margin):
         """Draw arrow pointing to exit opening"""
         import math
 
@@ -167,7 +200,7 @@ class MazeGenerator:
                 angle = math.radians(angles[i])
                 start_x = cx + arrow_size * math.cos(angle)
                 start_y = cy + arrow_size * math.sin(angle)
-                dwg.add(
+                g.add(
                     dwg.line(
                         (start_x, start_y),
                         (cx, cy),
@@ -178,7 +211,7 @@ class MazeGenerator:
                 )
                 break
 
-    def _draw_walls(self, dwg, cell, cell_size, stroke_width, margin):
+    def _draw_walls(self, dwg, g, cell, cell_size, stroke_width, margin):
         """Draw walls for edges without passages"""
         x, y = cell.get_position()
         x = x * cell_size + margin
@@ -215,4 +248,4 @@ class MazeGenerator:
                 if cell == self.exit_cell and not neighbor:
                     continue
                 p1, p2 = edges[i]
-                dwg.add(dwg.line(p1, p2, stroke="black", stroke_width=stroke_width))
+                g.add(dwg.line(p1, p2, stroke="black", stroke_width=stroke_width))
