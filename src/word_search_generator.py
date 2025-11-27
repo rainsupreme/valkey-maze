@@ -1,13 +1,24 @@
 import random
 import svgwrite
+import os
 
 class WordSearchGenerator:
     DIRECTIONS = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (1, -1), (-1, 1)]
     
-    def __init__(self, size=15):
+    def __init__(self, size=15, banned_words_file=None):
         self.size = size
         self.grid = [['' for _ in range(size)] for _ in range(size)]
         self.placed_words = []
+        self.banned_words = self._load_banned_words(banned_words_file)
+    
+    def _load_banned_words(self, filepath):
+        if filepath is None:
+            filepath = os.path.join(os.path.dirname(__file__), 'banned_words.txt')
+        try:
+            with open(filepath, 'r') as f:
+                return set(line.strip().upper() for line in f if line.strip())
+        except FileNotFoundError:
+            return set()
     
     def can_place(self, word, row, col, dr, dc):
         for i, char in enumerate(word):
@@ -50,7 +61,40 @@ class WordSearchGenerator:
         for r in range(self.size):
             for c in range(self.size):
                 if not self.grid[r][c]:
-                    self.grid[r][c] = random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                    self.grid[r][c] = self._get_safe_letter(r, c)
+    
+    def _get_safe_letter(self, row, col):
+        if not self.banned_words:
+            return random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        
+        candidates = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        random.shuffle(candidates)
+        
+        for letter in candidates:
+            if self._is_safe_placement(row, col, letter):
+                return letter
+        assert False  # surprising to get here
+    
+    def _is_safe_placement(self, row, col, letter):
+        for dr, dc in self.DIRECTIONS:
+            for length in range(2, 10):
+                for start_offset in range(length):
+                    word = []
+                    valid = True
+                    for i in range(length):
+                        r = row + (i - start_offset) * dr
+                        c = col + (i - start_offset) * dc
+                        if not (0 <= r < self.size and 0 <= c < self.size):
+                            valid = False
+                            break
+                        char = letter if (r == row and c == col) else self.grid[r][c]
+                        if not char:
+                            valid = False
+                            break
+                        word.append(char)
+                    if valid and ''.join(word) in self.banned_words:
+                        return False
+        return True
     
     def render_svg(self, filename, cell_size=30, display_words=None):
         svg_string = self.render_svg_string(cell_size, display_words)
