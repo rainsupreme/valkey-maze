@@ -4,25 +4,27 @@ from src.word_search_generator import WordSearchGenerator
 words = """
 VALKEY
 PERFORMANCE
-CACHE
+KEYVALUE
 DATABASE
+CACHE
 MEMORY
 FAST
-BSD
-KEYVALUE
+RELIABLE
 SCALABLE
+AVAILABILITY
 MICROSECOND
 OPENSOURCE
+COMMUNITY
 PRIMARY
 REPLICA
 CLUSTER
 SHARD
-COMMUNITY
 OPTIMIZED
+DISTRIBUTED
 FIREDUCKS
 """.strip().split('\n')
 
-generator = WordSearchGenerator(size=15)
+generator = WordSearchGenerator(size=18)
 generator.add_words(words)
 generator.render_svg('word_search.svg')
 generator.render_solution('word_search_solution.svg')

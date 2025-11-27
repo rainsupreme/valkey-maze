@@ -52,6 +52,7 @@ class MazeGenerator:
     def _find_exit(self):
         """Find farthest border cell from start using BFS"""
         distances = {self.start_cell: 0}
+        parent = {self.start_cell: None}
         queue = deque([self.start_cell])
 
         while queue:
@@ -59,6 +60,7 @@ class MazeGenerator:
             for neighbor in cell.passages:
                 if neighbor not in distances:
                     distances[neighbor] = distances[cell] + 1
+                    parent[neighbor] = cell
                     queue.append(neighbor)
 
         # Find border cells (cells with missing neighbors)
@@ -69,6 +71,14 @@ class MazeGenerator:
         ]
 
         self.exit_cell = max(border_cells, key=lambda c: distances[c])
+        
+        # Reconstruct solution path
+        self.solution_path = []
+        cell = self.exit_cell
+        while cell:
+            self.solution_path.append(cell)
+            cell = parent[cell]
+        self.solution_path.reverse()
 
     def _create_open_center(self):
         """Create fully connected hexagon in center"""
@@ -94,6 +104,12 @@ class MazeGenerator:
 
     def render_maze(self, filename, cell_size=30, stroke_width=3, arrow_size=10, margin=40, logo_svg=None, logo_color='black'):
         """Render maze by drawing walls where there are no passages"""
+        svg_string = self.render_maze_string(cell_size, stroke_width, arrow_size, margin, logo_svg, logo_color)
+        with open(filename, 'w') as f:
+            f.write(svg_string)
+
+    def render_maze_string(self, cell_size=30, stroke_width=3, arrow_size=10, margin=40, logo_svg=None, logo_color='black', show_solution=False, solution_color='red', solution_width=2):
+        """Render maze and return as SVG string"""
         stretch = 1.03
         self.stretch = stretch
 
@@ -102,7 +118,7 @@ class MazeGenerator:
         width = maze_height + 2 * margin
         height = (maze_width + 2 * margin) * stretch
 
-        dwg = svgwrite.Drawing(filename, size=(width, height))
+        dwg = svgwrite.Drawing(size=(width, height))
         dwg.add(dwg.rect((0, 0), (width, height), fill="white"))
 
         # Create transform group for rotation and scaling
@@ -112,6 +128,9 @@ class MazeGenerator:
         for cell in self.grid.cells.values():
             self._draw_walls(dwg, g, cell, cell_size, stroke_width, margin)
 
+        if show_solution:
+            self._draw_solution(dwg, g, cell_size, margin, solution_color, solution_width)
+
         self._draw_exit_arrow(dwg, g, cell_size, arrow_size, stroke_width, margin)
 
         dwg.add(g)
@@ -119,8 +138,20 @@ class MazeGenerator:
         if logo_svg and self.center_hex_radius > 0:
             self._add_logo(dwg, logo_svg, width, height, self.center_hex_radius, cell_size, stretch, logo_color)
         
-        dwg.save()
+        return dwg.tostring()
 
+    def _draw_solution(self, dwg, g, cell_size, margin, color, width):
+        """Draw solution path as a colored line"""
+        points = []
+        for cell in self.solution_path:
+            x, y = cell.get_position()
+            cx = x * cell_size + margin + cell_size / 2
+            cy = y * cell_size + margin + cell_size * 0.866 / 2
+            points.append((cx, cy))
+        
+        for i in range(len(points) - 1):
+            g.add(dwg.line(points[i], points[i + 1], stroke=color, stroke_width=width))
+    
     def _add_logo(self, dwg, logo_svg, width, height, center_hex_radius, cell_size, stretch, logo_color):
         """Extract path from logo SVG and center it in the maze"""
         import xml.etree.ElementTree as ET
