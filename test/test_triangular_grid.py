@@ -1,11 +1,6 @@
 import pytest
-import sys
-import os
 
-# Add src directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from triangular_grid import TriangularGrid, TriangleCell
+from src.triangular_grid import TriangleCell, TriangularGrid
 
 
 def test_coord_property():
@@ -46,7 +41,7 @@ def test_grid_dimensions(triangular_grid):
 def test_cell_creation(triangular_grid):
     # Check that all cells were created
     assert len(triangular_grid.cells) == 12  # 3*4
-    
+
     # Check specific cell
     cell = triangular_grid.get_cell((1, 2))
     assert isinstance(cell, TriangleCell)
@@ -69,11 +64,11 @@ def test_neighbor_count(triangular_grid):
 def test_upward_triangle_neighbors():
     # Create a larger grid to properly test neighbors
     grid = TriangularGrid(5, 5)
-    
+
     # Test upward triangle at (2, 2) - should connect to (3,2), (2,1), (2,3)
     cell = grid.get_cell((2, 2))
     assert cell.is_upward
-    
+
     neighbor_coords = {n.coord for n in cell.neighbors}
     expected_coords = {(3, 2), (2, 1), (2, 3)}
     assert neighbor_coords == expected_coords
@@ -82,11 +77,11 @@ def test_upward_triangle_neighbors():
 def test_downward_triangle_neighbors():
     # Create a larger grid to properly test neighbors
     grid = TriangularGrid(5, 5)
-    
+
     # Test downward triangle at (1, 2) - should connect to (0,2), (1,1), (1,3)
     cell = grid.get_cell((1, 2))
     assert not cell.is_upward
-    
+
     neighbor_coords = {n.coord for n in cell.neighbors}
     expected_coords = {(0, 2), (1, 1), (1, 3)}
     assert neighbor_coords == expected_coords
@@ -106,7 +101,7 @@ def test_get_all_coords(triangular_grid):
     assert (2, 3) in coords
 
 
-def test_get_position(triangular_grid):
+def test_get_position_via_grid(triangular_grid):
     pos = triangular_grid.get_position((1, 2))
     expected_x = 2 * 0.5  # col * 0.5
     expected_y = 1 * 0.866  # row * 0.866
@@ -147,7 +142,11 @@ def test_upward_connects_to_next_row():
         cross_row_neighbors = [n for n in cell.neighbors if n.row != cell.row]
         if cell.is_upward:
             for neighbor in cross_row_neighbors:
-                assert neighbor.row == cell.row + 1, f"Upward cell {coord} connects to row {neighbor.row}, expected {cell.row + 1}"
+                assert neighbor.row == cell.row + 1, (
+                    f"Upward cell {coord} connects to row {neighbor.row}, expected {cell.row + 1}"
+                )
         else:
             for neighbor in cross_row_neighbors:
-                assert neighbor.row == cell.row - 1, f"Downward cell {coord} connects to row {neighbor.row}, expected {cell.row - 1}"
+                assert neighbor.row == cell.row - 1, (
+                    f"Downward cell {coord} connects to row {neighbor.row}, expected {cell.row - 1}"
+                )

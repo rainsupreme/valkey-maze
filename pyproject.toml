@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "valkey-maze"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["svgwrite"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy", "hypothesis"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

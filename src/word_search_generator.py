@@ -1,26 +1,46 @@
-import random
-import svgwrite
+from __future__ import annotations
+
+import logging
 import os
+import random
+
+import svgwrite
+
+logger = logging.getLogger(__name__)
+
 
 class WordSearchGenerator:
-    DIRECTIONS = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (1, -1), (-1, 1)]
-    
-    def __init__(self, size=15, banned_words_file=None):
+    DIRECTIONS: list[tuple[int, int]] = [(0, 1), (1, 0), (1, 1), (0, -1), (-1, 0), (-1, -1), (1, -1), (-1, 1)]
+    DEFAULT_CELL_SIZE = 30
+    DEFAULT_FONT_SIZE = 20
+    WORD_LIST_FONT_SIZE = 14
+    SOLUTION_COLORS: list[str] = [
+        "#FF6B6B",
+        "#4ECDC4",
+        "#45B7D1",
+        "#FFA07A",
+        "#98D8C8",
+        "#F7DC6F",
+        "#BB8FCE",
+        "#85C1E2",
+    ]
+
+    def __init__(self, size: int = 15, banned_words_file: str | None = None) -> None:
         self.size = size
-        self.grid = [['' for _ in range(size)] for _ in range(size)]
-        self.placed_words = []
-        self.banned_words = self._load_banned_words(banned_words_file)
-    
-    def _load_banned_words(self, filepath):
+        self.grid: list[list[str]] = [["" for _ in range(size)] for _ in range(size)]
+        self.placed_words: list[tuple[str, int, int, int, int]] = []
+        self.banned_words: set[str] = self._load_banned_words(banned_words_file)
+
+    def _load_banned_words(self, filepath: str | None) -> set[str]:
         if filepath is None:
-            filepath = os.path.join(os.path.dirname(__file__), 'banned_words.txt')
+            filepath = os.path.join(os.path.dirname(__file__), "banned_words.txt")
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath, "r") as f:
                 return set(line.strip().upper() for line in f if line.strip())
         except FileNotFoundError:
             return set()
-    
-    def can_place(self, word, row, col, dr, dc):
+
+    def can_place(self, word: str, row: int, col: int, dr: int, dc: int) -> bool:
         for i, char in enumerate(word):
             r, c = row + i * dr, col + i * dc
             if not (0 <= r < self.size and 0 <= c < self.size):
@@ -28,54 +48,54 @@ class WordSearchGenerator:
             if self.grid[r][c] and self.grid[r][c] != char:
                 return False
         return True
-    
-    def place_word(self, word, row, col, dr, dc):
+
+    def place_word(self, word: str, row: int, col: int, dr: int, dc: int) -> None:
         for i, char in enumerate(word):
             self.grid[row + i * dr][col + i * dc] = char
         self.placed_words.append((word, row, col, dr, dc))
-    
-    def add_words(self, words):
+
+    def add_words(self, words: list[str]) -> None:
         words = sorted([w.upper() for w in words], key=len, reverse=True)
-        
+
         for word in words:
             placed = False
             attempts = []
-            
+
             for _ in range(200):
                 row, col = random.randint(0, self.size - 1), random.randint(0, self.size - 1)
                 dr, dc = random.choice(self.DIRECTIONS)
                 if self.can_place(word, row, col, dr, dc):
-                    crosses = sum(1 for i in range(len(word)) 
-                                if self.grid[row + i * dr][col + i * dc])
+                    crosses = sum(1 for i in range(len(word)) if self.grid[row + i * dr][col + i * dc])
                     attempts.append((crosses, row, col, dr, dc))
-            
+
             if attempts:
                 attempts.sort(reverse=True)
-                _, row, col, dr, dc = attempts[0] if random.random() < 0.7 else random.choice(attempts[:5] if len(attempts) > 5 else attempts)
+                top = attempts[:5] if len(attempts) > 5 else attempts
+                _, row, col, dr, dc = attempts[0] if random.random() < 0.7 else random.choice(top)
                 self.place_word(word, row, col, dr, dc)
                 placed = True
-            
+
             if not placed:
-                print(f"Warning: Could not place '{word}'")
-        
+                logger.warning("Could not place '%s'", word)
+
         for r in range(self.size):
             for c in range(self.size):
                 if not self.grid[r][c]:
                     self.grid[r][c] = self._get_safe_letter(r, c)
-    
-    def _get_safe_letter(self, row, col):
+
+    def _get_safe_letter(self, row: int, col: int) -> str:
         if not self.banned_words:
-            return random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-        
-        candidates = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+            return random.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+        candidates = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
         random.shuffle(candidates)
-        
+
         for letter in candidates:
             if self._is_safe_placement(row, col, letter):
                 return letter
-        assert False  # surprising to get here
-    
-    def _is_safe_placement(self, row, col, letter):
+        raise ValueError(f"No safe letter for ({row}, {col})")
+
+    def _is_safe_placement(self, row: int, col: int, letter: str) -> bool:
         for dr, dc in self.DIRECTIONS:
             for length in range(2, 10):
                 for start_offset in range(length):
@@ -92,94 +112,77 @@ class WordSearchGenerator:
                             valid = False
                             break
                         word.append(char)
-                    if valid and ''.join(word) in self.banned_words:
+                    if valid and "".join(word) in self.banned_words:
                         return False
         return True
-    
-    def render_svg(self, filename, cell_size=30, display_words=None):
-        svg_string = self.render_svg_string(cell_size, display_words)
-        with open(filename, 'w') as f:
-            f.write(svg_string)
-    
-    def render_svg_string(self, cell_size=30, display_words=None):
-        words_to_display = [w for w, _, _, _, _ in self.placed_words if display_words is None or w in display_words]
+
+    def _render_grid_svg(self, cell_size: int, display_words: list[str] | None, show_solution: bool) -> str:
+        """Single internal method that produces all SVG variants."""
+        colors = self.SOLUTION_COLORS
+
+        if show_solution:
+            words_to_display = [w for w, _, _, _, _ in self.placed_words]
+        else:
+            words_to_display = [w for w, _, _, _, _ in self.placed_words if display_words is None or w in display_words]
+
         rows_needed = (len(words_to_display) + 3) // 4
         canvas_height = self.size * cell_size + 50 + rows_needed * 20
         dwg = svgwrite.Drawing(size=(self.size * cell_size, canvas_height))
-        dwg.add(dwg.rect((0, 0), (self.size * cell_size, canvas_height), fill='white'))
-        
+        dwg.add(dwg.rect((0, 0), (self.size * cell_size, canvas_height), fill="white"))
+
         for r in range(self.size):
             for c in range(self.size):
                 x, y = c * cell_size, r * cell_size
-                dwg.add(dwg.rect((x, y), (cell_size, cell_size), fill='white', stroke='black'))
-                dwg.add(dwg.text(self.grid[r][c], insert=(x + cell_size/2, y + cell_size*0.7),
-                                text_anchor='middle', font_size=20, font_family='Arial'))
-        
+                dwg.add(dwg.rect((x, y), (cell_size, cell_size), fill="white", stroke="black"))
+                dwg.add(
+                    dwg.text(
+                        self.grid[r][c],
+                        insert=(x + cell_size / 2, y + cell_size * 0.7),
+                        text_anchor="middle",
+                        font_size=self.DEFAULT_FONT_SIZE,
+                        font_family="Arial",
+                    )
+                )
+
+        if show_solution:
+            for i, (word, row, col, dr, dc) in enumerate(self.placed_words):
+                color = colors[i % len(colors)]
+                x1 = col * cell_size + cell_size / 2
+                y1 = row * cell_size + cell_size / 2
+                x2 = (col + (len(word) - 1) * dc) * cell_size + cell_size / 2
+                y2 = (row + (len(word) - 1) * dr) * cell_size + cell_size / 2
+                dwg.add(dwg.line((x1, y1), (x2, y2), stroke=color, stroke_width=4, opacity=0.5))
+
         y_offset = self.size * cell_size + 20
-        dwg.add(dwg.text('Words:', insert=(10, y_offset), font_size=16, font_weight='bold'))
+        header = "Solution:" if show_solution else "Words:"
+        dwg.add(dwg.text(header, insert=(10, y_offset), font_size=16, font_weight="bold"))
         for i, word in enumerate(words_to_display):
-            dwg.add(dwg.text(word, insert=(10 + (i % 4) * 120, y_offset + 25 + (i // 4) * 20), font_size=14))
-        
+            text_kwargs = dict(
+                insert=(10 + (i % 4) * 120, y_offset + 25 + (i // 4) * 20),
+                font_size=self.WORD_LIST_FONT_SIZE,
+            )
+            if show_solution:
+                text_kwargs["fill"] = colors[i % len(colors)]
+            dwg.add(dwg.text(word, **text_kwargs))
+
         return dwg.tostring()
-    
-    def render_solution_svg_string(self, cell_size=30):
-        rows_needed = (len(self.placed_words) + 3) // 4
-        canvas_height = self.size * cell_size + 50 + rows_needed * 20
-        dwg = svgwrite.Drawing(size=(self.size * cell_size, canvas_height))
-        dwg.add(dwg.rect((0, 0), (self.size * cell_size, canvas_height), fill='white'))
-        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2']
-        
-        for r in range(self.size):
-            for c in range(self.size):
-                x, y = c * cell_size, r * cell_size
-                dwg.add(dwg.rect((x, y), (cell_size, cell_size), fill='white', stroke='black'))
-                dwg.add(dwg.text(self.grid[r][c], insert=(x + cell_size/2, y + cell_size*0.7),
-                                text_anchor='middle', font_size=20, font_family='Arial'))
-        
-        for i, (word, row, col, dr, dc) in enumerate(self.placed_words):
-            color = colors[i % len(colors)]
-            x1 = col * cell_size + cell_size / 2
-            y1 = row * cell_size + cell_size / 2
-            x2 = (col + (len(word) - 1) * dc) * cell_size + cell_size / 2
-            y2 = (row + (len(word) - 1) * dr) * cell_size + cell_size / 2
-            dwg.add(dwg.line((x1, y1), (x2, y2), stroke=color, stroke_width=4, opacity=0.5))
-        
-        y_offset = self.size * cell_size + 20
-        dwg.add(dwg.text('Solution:', insert=(10, y_offset), font_size=16, font_weight='bold'))
-        for i, (word, _, _, _, _) in enumerate(self.placed_words):
-            color = colors[i % len(colors)]
-            dwg.add(dwg.text(word, insert=(10 + (i % 4) * 120, y_offset + 25 + (i // 4) * 20), 
-                           font_size=14, fill=color))
-        
-        return dwg.tostring()
-    
-    def render_solution(self, filename, cell_size=30):
-        rows_needed = (len(self.placed_words) + 3) // 4
-        canvas_height = self.size * cell_size + 50 + rows_needed * 20
-        dwg = svgwrite.Drawing(filename, size=(self.size * cell_size, canvas_height))
-        dwg.add(dwg.rect((0, 0), (self.size * cell_size, canvas_height), fill='white'))
-        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2']
-        
-        for r in range(self.size):
-            for c in range(self.size):
-                x, y = c * cell_size, r * cell_size
-                dwg.add(dwg.rect((x, y), (cell_size, cell_size), fill='white', stroke='black'))
-                dwg.add(dwg.text(self.grid[r][c], insert=(x + cell_size/2, y + cell_size*0.7),
-                                text_anchor='middle', font_size=20, font_family='Arial'))
-        
-        for i, (word, row, col, dr, dc) in enumerate(self.placed_words):
-            color = colors[i % len(colors)]
-            x1 = col * cell_size + cell_size / 2
-            y1 = row * cell_size + cell_size / 2
-            x2 = (col + (len(word) - 1) * dc) * cell_size + cell_size / 2
-            y2 = (row + (len(word) - 1) * dr) * cell_size + cell_size / 2
-            dwg.add(dwg.line((x1, y1), (x2, y2), stroke=color, stroke_width=4, opacity=0.5))
-        
-        y_offset = self.size * cell_size + 20
-        dwg.add(dwg.text('Solution:', insert=(10, y_offset), font_size=16, font_weight='bold'))
-        for i, (word, _, _, _, _) in enumerate(self.placed_words):
-            color = colors[i % len(colors)]
-            dwg.add(dwg.text(word, insert=(10 + (i % 4) * 120, y_offset + 25 + (i // 4) * 20), 
-                           font_size=14, fill=color))
-        
-        dwg.save()
+
+    def render_svg(self, filename: str, cell_size: int | None = None, display_words: list[str] | None = None) -> None:
+        cell_size = cell_size if cell_size is not None else self.DEFAULT_CELL_SIZE
+        svg_string = self.render_svg_string(cell_size, display_words)
+        with open(filename, "w") as f:
+            f.write(svg_string)
+
+    def render_svg_string(self, cell_size: int | None = None, display_words: list[str] | None = None) -> str:
+        cell_size = cell_size if cell_size is not None else self.DEFAULT_CELL_SIZE
+        return self._render_grid_svg(cell_size, display_words, show_solution=False)
+
+    def render_solution_svg_string(self, cell_size: int | None = None) -> str:
+        cell_size = cell_size if cell_size is not None else self.DEFAULT_CELL_SIZE
+        return self._render_grid_svg(cell_size, display_words=None, show_solution=True)
+
+    def render_solution(self, filename: str, cell_size: int | None = None) -> None:
+        cell_size = cell_size if cell_size is not None else self.DEFAULT_CELL_SIZE
+        svg_string = self.render_solution_svg_string(cell_size)
+        with open(filename, "w") as f:
+            f.write(svg_string)

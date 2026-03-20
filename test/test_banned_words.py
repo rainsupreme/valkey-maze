@@ -1,10 +1,7 @@
-import sys
 import os
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from word_search_generator import WordSearchGenerator
+from src.word_search_generator import WordSearchGenerator
 
 
 def test_is_safe_placement_detects_horizontal():

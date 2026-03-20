@@ -22,12 +22,12 @@ SHARD
 OPTIMIZED
 DISTRIBUTED
 FIREDUCKS
-""".strip().split('\n')
+""".strip().split("\n")
 
 generator = WordSearchGenerator(size=18)
 generator.add_words(words)
-generator.render_svg('word_search.svg')
-generator.render_solution('word_search_solution.svg')
+generator.render_svg("word_search.svg")
+generator.render_solution("word_search_solution.svg")
 
 print("Word search generated: word_search.svg")
 print("Solution generated: word_search_solution.svg")
