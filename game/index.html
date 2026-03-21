@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valkey Maze Game</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <div id="maze-container"></div>
+
+  <div id="controls">
+    <div id="legend">
+      <h3>Controls</h3>
+      <div class="legend-diagrams">
+        <!-- Single unified diagram: 6 visual directions with QWEASD keys -->
+        <div class="legend-diagram">
+          <svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140">
+            <defs>
+              <marker id="ah" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+                <polygon points="0,0 7,2.5 0,5" fill="#6983ff"/>
+              </marker>
+            </defs>
+            <!-- Center dot -->
+            <circle cx="70" cy="70" r="12" fill="#ff9b29" opacity="1"/>
+            <!-- B label: back/retrace -->
+            <text x="70" y="74" text-anchor="middle" fill="#fff" font-size="12" font-family="monospace" font-weight="bold">B</text>
+            <!-- W arrow: up -->
+            <line x1="70" y1="60" x2="70" y2="28" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="70" y="18" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">W</text>
+            <!-- S arrow: down -->
+            <line x1="70" y1="80" x2="70" y2="112" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="70" y="130" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">S</text>
+            <!-- Q arrow: upper-left -->
+            <line x1="60" y1="60" x2="34" y2="34" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="22" y="24" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">Q</text>
+            <!-- E arrow: upper-right -->
+            <line x1="80" y1="60" x2="106" y2="34" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="118" y="24" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">E</text>
+            <!-- A arrow: lower-left -->
+            <line x1="60" y1="80" x2="34" y2="106" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="22" y="124" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">A</text>
+            <!-- D arrow: lower-right -->
+            <line x1="80" y1="80" x2="106" y2="106" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="118" y="124" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">D</text>
+          </svg>
+          <span class="legend-label"><kbd>B</kbd> = retrace path</span>
+        </div>
+      </div>
+    </div>
+    <button id="reset-btn">Reset</button>
+  </div>
+
+  <img id="logo" src="../assets/valkey-logo-aligned.svg" alt="Valkey logo" hidden>
+
+  <script src="game.js?v=4"></script>
+</body>
+</html>
