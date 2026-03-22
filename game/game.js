@@ -1,3 +1,13 @@
+// ── Imports from shared pure-logic module ───────────────────
+import {
+    VISUAL_TO_GRID,
+    KEY_BINDINGS,
+    resolveNeighbor,
+    resolveVisualDirection,
+    autoSlide,
+    autoSlideBack,
+} from './game.logic.js';
+
 // ── Theme Colors ────────────────────────────────────────────
 const THEME = {
     player: '#ffffff',    // bright copper/orange — player marker & trail
@@ -12,29 +22,6 @@ const TRAIL = {
     gap: 40,              // gap between dashes (SVG units)
     get cycle() { return this.dash + this.gap; },   // total cycle length
     normalDuration: 1.5,  // seconds per cycle at normal speed
-};
-
-// ── Visual-to-Grid Direction Mapping ────────────────────────
-// The SVG has a 90° CW rotation. Each visual direction maps to a different
-// grid direction depending on whether the current cell is ▲ or ▽.
-const VISUAL_TO_GRID = {
-    'up':          { true: 'up-left',  false: 'down-left'  },
-    'down':        { true: 'up-right', false: 'down-right' },
-    'upper-left':  { true: 'down',     false: 'down-left'  },
-    'lower-left':  { true: 'down',     false: 'down-right' },
-    'upper-right': { true: 'up-left',  false: 'up'         },
-    'lower-right': { true: 'up-right', false: 'up'         },
-};
-
-// ── Key Bindings ────────────────────────────────────────────
-// QWEASD layout maps to 6 visual directions.
-const KEY_BINDINGS = {
-    'KeyW': 'up',
-    'KeyS': 'down',
-    'KeyQ': 'upper-left',
-    'KeyE': 'upper-right',
-    'KeyA': 'lower-left',
-    'KeyD': 'lower-right',
 };
 
 // ── MazeData ────────────────────────────────────────────────
@@ -215,7 +202,7 @@ const GameRenderer = {
                     line.setAttribute('x2', e.x2);
                     line.setAttribute('y2', e.y2);
                     line.setAttribute('stroke', THEME.maze);
-                    line.setAttribute('stroke-width', '3');
+                    line.setAttribute('stroke-width', '5');
                     g.appendChild(line);
                 }
             }
@@ -398,6 +385,7 @@ const GameRenderer = {
             this.transformGroup.appendChild(polyline);
         }
     },
+
     reset() {
         this.resetFanfare();
         if (this.trailElement) {
@@ -553,8 +541,6 @@ const GameRenderer = {
         ];
 
         // ── Phase 1: SVG mask + rainbow segments ──
-        // The mask is a white dashed polyline (same shape as trail) — white = visible.
-        // The rainbow is solid colored segments underneath, clipped by the mask.
         const segLen = 6;
         const numSegs = Math.ceil(totalLen / segLen);
 
@@ -563,7 +549,6 @@ const GameRenderer = {
         const mask = document.createElementNS(NS, 'mask');
         mask.setAttribute('id', 'win-trail-mask');
         mask.setAttribute('maskUnits', 'userSpaceOnUse');
-        // Set mask bounds very large to cover the full transform group coordinate space
         mask.setAttribute('x', '-10000');
         mask.setAttribute('y', '-10000');
         mask.setAttribute('width', '20000');
@@ -639,13 +624,8 @@ const GameRenderer = {
         };
         this._winRafId = requestAnimationFrame(animateRainbow);
 
-        // ── Phase 2: (logo glow removed — hex bg glow handles this now) ──
-
         // ── Phase 3: After a short beat, start the slurp ──
         this._winTimers.push(setTimeout(() => {
-            // Color cycling + mask dash animation keep running during slurp
-
-            // Slurp: progressively remove segments from the entry end
             const slurpInterval = slurpMs / segments.length;
             let slurpIdx = 0;
             const slurpTimer = setInterval(() => {
@@ -728,8 +708,7 @@ const GameRenderer = {
         hex.setAttribute('opacity', '1');
 
         // Smooth hue rotation — soft pastels, slow cycle (12s full rotation)
-        // Also applies a matching color glow (drop-shadow) to the hex
-        const cycleDuration = 12;  // seconds per full hue rotation
+        const cycleDuration = 12;
         let startTime = null;
         const animateHue = (now) => {
             if (!startTime) startTime = now;
@@ -761,7 +740,6 @@ const GameRenderer = {
 
         const reach = Math.min(width, height) / 2;
         const numRays = 32;
-        // Wide rays — lots of overlap for rich additive blending
         const rayHalfAngle = Math.PI / 16 * 0.5;
 
         // Simple seeded PRNG for deterministic but random-looking values
@@ -776,8 +754,7 @@ const GameRenderer = {
             return d;
         })();
 
-        // Radial gradient mask: white at center (visible), black at edges (hidden)
-        // Opaque out to the logo hex radius, then fades to transparent by the maze edge
+        // Radial gradient mask
         const hexR = md.centerHexRadius * cs;
         const opaqueStop = Math.round((hexR / reach) * 100);
         const fadeStop = 100;
@@ -798,7 +775,7 @@ const GameRenderer = {
         defs.appendChild(grad);
         this._winRayGradient = grad;
 
-        // SVG mask using the radial gradient — fades rays from center outward
+        // SVG mask using the radial gradient
         const fadeMask = document.createElementNS(NS, 'mask');
         fadeMask.setAttribute('id', 'god-ray-mask');
         fadeMask.setAttribute('maskUnits', 'userSpaceOnUse');
@@ -816,9 +793,7 @@ const GameRenderer = {
         defs.appendChild(fadeMask);
         this._winRayMask = fadeMask;
 
-        // Container group: masked for radial fade, behind maze walls
-        // isolation: isolate creates a compositing boundary so rays screen-blend
-        // against each other within the group, producing brighter overlaps
+        // Container group
         const containerGroup = document.createElementNS(NS, 'g');
         containerGroup.setAttribute('mask', 'url(#god-ray-mask)');
         containerGroup.style.isolation = 'isolate';
@@ -829,7 +804,6 @@ const GameRenderer = {
         const rayData = [];
         for (let i = 0; i < numRays; i++) {
             const baseAngle = (2 * Math.PI / numRays) * i;
-            // Random speed 2-10 deg/s, random direction, random hue phase
             const speed = 2 + rng() * 8;
             const dir = rng() < 0.5 ? -1 : 1;
             const huePhase = rng() * 360;
@@ -844,7 +818,6 @@ const GameRenderer = {
             const x2 = cx + reach * Math.cos(a2);
             const y2 = cy + reach * Math.sin(a2) * stretch;
 
-            // Colored triangle — the mask handles the radial fade
             const poly = document.createElementNS(NS, 'polygon');
             poly.setAttribute('points', `${cx},${cy} ${x1},${y1} ${x2},${y2}`);
 
@@ -977,6 +950,7 @@ const GameRenderer = {
 };
 
 // ── PlayerController ────────────────────────────────────────
+// Movement logic delegates to the pure functions in game.logic.js.
 const PlayerController = {
     currentCell: '',
     pathTrail: [],
@@ -989,6 +963,7 @@ const PlayerController = {
         GameRenderer.drawPlayerMarker(entryCell);
         GameRenderer.updateTrail(this.pathTrail);
     },
+
     handleKeydown(event) {
         if (this.locked) return;
         if (event.code === 'KeyB') {
@@ -999,8 +974,9 @@ const PlayerController = {
         if (!direction) return;
         this.moveDirection(direction);
     },
+
     moveDirection(direction) {
-        const result = this._autoSlide(this.currentCell, direction);
+        const result = autoSlide(this.currentCell, direction, this.pathTrail, MazeData);
         if (result.finalCoord === this.currentCell && result.newTrail.length === this.pathTrail.length) {
             return; // No movement occurred
         }
@@ -1014,137 +990,19 @@ const PlayerController = {
             GameStateManager.onWin();
         }
     },
+
     reset() {
         this.init(MazeData.entryCell);
     },
+
     moveBack() {
         if (this.pathTrail.length <= 1) return;
-        const result = this._autoSlideBack();
+        const result = autoSlideBack(this.pathTrail, MazeData);
         if (result.finalCoord === this.currentCell) return;
         this.currentCell = result.finalCoord;
         this.pathTrail = result.newTrail;
         GameRenderer.drawPlayerMarker(this.currentCell);
         GameRenderer.updateTrail(this.pathTrail);
-    },
-    _autoSlideBack() {
-        const trail = [...this.pathTrail];
-
-        while (trail.length > 1) {
-            const current = trail[trail.length - 1];
-            const prev = trail[trail.length - 2];
-
-            const neighbors = MazeData.getPassageNeighbors(current);
-            const forwardOptions = neighbors.filter(n => n !== prev);
-            if (forwardOptions.length > 1 && trail.length < this.pathTrail.length) {
-                break;
-            }
-
-            trail.pop();
-
-            if (trail.length > 1) {
-                const newCurrent = trail[trail.length - 1];
-                const newPrev = trail[trail.length - 2];
-                const newNeighbors = MazeData.getPassageNeighbors(newCurrent);
-                const newForward = newNeighbors.filter(n => n !== newPrev);
-                if (newForward.length > 1) {
-                    break;
-                }
-            }
-        }
-
-        return { finalCoord: trail[trail.length - 1], newTrail: trail };
-    },
-    _resolveNeighbor(coord, direction) {
-        const cell = MazeData.cells.get(coord);
-        if (!cell) return null;
-
-        const { row, col, upward } = cell;
-        let nr, nc;
-
-        if (upward) {
-            switch (direction) {
-                case 'up-left':   nr = row;     nc = col - 1; break;
-                case 'up-right':  nr = row;     nc = col + 1; break;
-                case 'down':      nr = row + 1; nc = col;     break;
-                case 'down-left': nr = row + 1; nc = col;     break;
-                case 'down-right':nr = row + 1; nc = col;     break;
-                case 'up':        return null;
-                default:          return null;
-            }
-        } else {
-            switch (direction) {
-                case 'up':        nr = row - 1; nc = col;     break;
-                case 'down-left': nr = row;     nc = col - 1; break;
-                case 'down-right':nr = row;     nc = col + 1; break;
-                case 'up-left':   nr = row;     nc = col - 1; break;
-                case 'up-right':  nr = row;     nc = col + 1; break;
-                case 'down':      return null;
-                default:          return null;
-            }
-        }
-
-        const neighborKey = `${nr},${nc}`;
-        return MazeData.cells.has(neighborKey) ? neighborKey : null;
-    },
-    _resolveVisualNeighbor(coord, visualDir) {
-        const cell = MazeData.cells.get(coord);
-        if (!cell) return null;
-        const mapping = VISUAL_TO_GRID[visualDir];
-        if (!mapping) return null;
-        const gridDir = mapping[cell.upward];
-        return this._resolveNeighbor(coord, gridDir);
-    },
-    _autoSlide(startCoord, visualDir) {
-        const trail = [...this.pathTrail];
-        let current = startCoord;
-
-        const firstNeighbor = this._resolveVisualNeighbor(current, visualDir);
-        if (!firstNeighbor || !MazeData.hasPassage(current, firstNeighbor)) {
-            return { finalCoord: current, newTrail: trail };
-        }
-
-        // Check backtrack on first neighbor
-        const backtrackIdx = trail.indexOf(firstNeighbor);
-        if (backtrackIdx !== -1) {
-            const truncated = trail.slice(0, backtrackIdx + 1);
-            return { finalCoord: firstNeighbor, newTrail: truncated };
-        }
-
-        current = firstNeighbor;
-        trail.push(current);
-
-        if (MazeData.isGoal(current)) {
-            return { finalCoord: current, newTrail: trail };
-        }
-
-        while (true) {
-            const next = this._resolveVisualNeighbor(current, visualDir);
-            if (!next || !MazeData.hasPassage(current, next)) {
-                break;
-            }
-
-            const btIdx = trail.indexOf(next);
-            if (btIdx !== -1) {
-                const truncated = trail.slice(0, btIdx + 1);
-                return { finalCoord: next, newTrail: truncated };
-            }
-
-            const prev = trail.length >= 2 ? trail[trail.length - 2] : null;
-            const neighbors = MazeData.getPassageNeighbors(current);
-            const forwardOptions = neighbors.filter(n => n !== prev);
-            if (forwardOptions.length > 1) {
-                break;
-            }
-
-            current = next;
-            trail.push(current);
-
-            if (MazeData.isGoal(current)) {
-                break;
-            }
-        }
-
-        return { finalCoord: current, newTrail: trail };
     },
 };
 
@@ -1187,133 +1045,5 @@ document.addEventListener('DOMContentLoaded', () => {
     GameStateManager.init();
 });
 
-// ── Cheat Mode (for testing) ────────────────────────────────
-// Type cheat() in the browser console to enable, then press R to take the
-// optimal next step toward the goal. Uses BFS to find the shortest path.
-let _cheatEnabled = false;
-
-function cheat() {
-    _cheatEnabled = true;
-    console.log('%c🔓 Cheat mode enabled. Press R to take the next optimal step.', 'color: #0f0; font-size: 14px');
-}
-
-function _bfsNextStep() {
-    const start = PlayerController.currentCell;
-    if (MazeData.isGoal(start)) return null;
-
-    const visited = new Set([start]);
-    const parent = new Map();
-    const queue = [start];
-
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (MazeData.isGoal(current)) {
-            // Trace back to find the first step from start
-            let step = current;
-            while (parent.get(step) !== start) {
-                step = parent.get(step);
-            }
-            return step;
-        }
-        for (const neighbor of MazeData.getPassageNeighbors(current)) {
-            if (!visited.has(neighbor)) {
-                visited.add(neighbor);
-                parent.set(neighbor, current);
-                queue.push(neighbor);
-            }
-        }
-    }
-    return null; // no path found
-}
-
-document.addEventListener('keydown', (e) => {
-    if (!_cheatEnabled || e.code !== 'KeyR') return;
-    if (PlayerController.locked) return;
-
-    const nextCell = _bfsNextStep();
-    if (!nextCell) return;
-
-    // Check if next step is a backtrack (already on trail)
-    const trailIdx = PlayerController.pathTrail.indexOf(nextCell);
-    if (trailIdx !== -1) {
-        PlayerController.pathTrail = PlayerController.pathTrail.slice(0, trailIdx + 1);
-    } else {
-        PlayerController.pathTrail.push(nextCell);
-    }
-    PlayerController.currentCell = nextCell;
-    GameRenderer.drawPlayerMarker(nextCell);
-    GameRenderer.updateTrail(PlayerController.pathTrail);
-
-    if (MazeData.isGoal(nextCell)) {
-        GameStateManager.onWin();
-    }
-});
-
-function _bfsFullPath() {
-    const start = PlayerController.currentCell;
-    if (MazeData.isGoal(start)) return null;
-
-    const visited = new Set([start]);
-    const parent = new Map();
-    const queue = [start];
-
-    while (queue.length > 0) {
-        const current = queue.shift();
-        if (MazeData.isGoal(current)) {
-            const path = [current];
-            let step = current;
-            while (parent.has(step)) {
-                step = parent.get(step);
-                path.unshift(step);
-            }
-            return path;
-        }
-        for (const neighbor of MazeData.getPassageNeighbors(current)) {
-            if (!visited.has(neighbor)) {
-                visited.add(neighbor);
-                parent.set(neighbor, current);
-                queue.push(neighbor);
-            }
-        }
-    }
-    return null;
-}
-
-function win(stepDelay = 30) {
-    if (PlayerController.locked) {
-        console.log('%c⚠️ Game already won. Reset first.', 'color: #ff0');
-        return;
-    }
-    const fullPath = _bfsFullPath();
-    if (!fullPath) {
-        console.log('%c⚠️ Already at goal or no path found.', 'color: #ff0');
-        return;
-    }
-    // Remove the first element (current cell, already on trail)
-    const steps = fullPath.slice(1);
-    console.log(`%c🏆 Auto-solving: ${steps.length} steps...`, 'color: #0f0; font-size: 14px');
-
-    let i = 0;
-    const interval = setInterval(() => {
-        if (i >= steps.length) {
-            clearInterval(interval);
-            return;
-        }
-        const nextCell = steps[i];
-        const trailIdx = PlayerController.pathTrail.indexOf(nextCell);
-        if (trailIdx !== -1) {
-            PlayerController.pathTrail = PlayerController.pathTrail.slice(0, trailIdx + 1);
-        } else {
-            PlayerController.pathTrail.push(nextCell);
-        }
-        PlayerController.currentCell = nextCell;
-        GameRenderer.drawPlayerMarker(nextCell);
-        GameRenderer.updateTrail(PlayerController.pathTrail);
-
-        if (MazeData.isGoal(nextCell)) {
-            clearInterval(interval);
-            GameStateManager.onWin();
-        }
-        i++;
-    }, stepDelay);
-}
+// ── Expose internals for debug module ───────────────────────
+export { MazeData, GameRenderer, PlayerController, GameStateManager };
