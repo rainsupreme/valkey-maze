@@ -5,6 +5,15 @@ const THEME = {
     bg:     '#000000',    // black — SVG background
 };
 
+// ── Trail Dash Configuration ────────────────────────────────
+// All dash-related values derive from these two numbers.
+const TRAIL = {
+    dash: 9,              // visible dash length (SVG units)
+    gap: 40,              // gap between dashes (SVG units)
+    get cycle() { return this.dash + this.gap; },   // total cycle length
+    normalDuration: 1.5,  // seconds per cycle at normal speed
+};
+
 // ── Visual-to-Grid Direction Mapping ────────────────────────
 // The SVG has a 90° CW rotation. Each visual direction maps to a different
 // grid direction depending on whether the current cell is ▲ or ▽.
@@ -144,6 +153,10 @@ const GameRenderer = {
         this.svg = svg;
         this.transformGroup = g;
         svgContainer.appendChild(svg);
+
+        // Set CSS custom properties for trail dash animation
+        document.documentElement.style.setProperty('--trail-cycle-neg', `${-TRAIL.cycle}`);
+        document.documentElement.style.setProperty('--trail-duration', `${TRAIL.normalDuration}s`);
     },
 
     drawMaze() {
@@ -275,6 +288,7 @@ const GameRenderer = {
 
             // Add directly to SVG element, outside the transform group
             this.svg.appendChild(path);
+            this.logoElement = path;
         } catch (e) {
             // Logo fetch failed — silently continue without logo
         }
@@ -282,6 +296,7 @@ const GameRenderer = {
 
     playerMarker: null,
     trailElement: null,
+    logoElement: null,
 
     drawPlayerMarker(coord) {
         const NS = 'http://www.w3.org/2000/svg';
@@ -336,18 +351,27 @@ const GameRenderer = {
             allPoints.push(`${entryTail.x},${entryTail.y}`);
         }
 
-        // Always include the entry cell center (even for single-element trail)
-        const entryCenter = (() => {
+        // For a single cell, just show the cell center
+        if (pathStack.length <= 1) {
             const [r, c] = MazeData.entryCell.split(',').map(Number);
-            return this._cellCenter(r, c);
-        })();
-        allPoints.push(`${entryCenter.x},${entryCenter.y}`);
-
-        // Add remaining trail points (skip first since we already added entry center)
-        for (let i = 1; i < pathStack.length; i++) {
-            const [row, col] = pathStack[i].split(',').map(Number);
-            const center = this._cellCenter(row, col);
+            const center = this._cellCenter(r, c);
             allPoints.push(`${center.x},${center.y}`);
+        } else {
+            // First cell center (entry point)
+            const [r0, c0] = pathStack[0].split(',').map(Number);
+            allPoints.push(`${this._cellCenter(r0, c0).x},${this._cellCenter(r0, c0).y}`);
+
+            // Passage midpoints between consecutive cells
+            for (let i = 0; i < pathStack.length - 1; i++) {
+                const mid = this._passageMidpoint(pathStack[i], pathStack[i + 1]);
+                if (mid) {
+                    allPoints.push(`${mid.x},${mid.y}`);
+                }
+            }
+
+            // Last cell center (current position)
+            const [rN, cN] = pathStack[pathStack.length - 1].split(',').map(Number);
+            allPoints.push(`${this._cellCenter(rN, cN).x},${this._cellCenter(rN, cN).y}`);
         }
 
         // Reuse existing polyline to preserve CSS animation state
@@ -363,7 +387,7 @@ const GameRenderer = {
         polyline.setAttribute('stroke-width', '9');
         polyline.setAttribute('stroke-linecap', 'round');
         polyline.setAttribute('stroke-linejoin', 'round');
-        polyline.setAttribute('stroke-dasharray', '9 15');
+        polyline.setAttribute('stroke-dasharray', `${TRAIL.dash} ${TRAIL.gap}`);
         polyline.classList.add('trail-animated');
         this.trailElement = polyline;
 
@@ -375,6 +399,7 @@ const GameRenderer = {
         }
     },
     reset() {
+        this.resetFanfare();
         if (this.trailElement) {
             this.trailElement.remove();
             this.trailElement = null;
@@ -398,6 +423,48 @@ const GameRenderer = {
         } else {
             return { x: x + cs / 2, y: y + h * 1 / 3 };
         }
+    },
+
+    _passageMidpoint(coordA, coordB) {
+        // Find the shared edge between two adjacent cells and return its midpoint.
+        const md = this.mazeData;
+        const cellA = md.cells.get(coordA);
+        const cellB = md.cells.get(coordB);
+        if (!cellA || !cellB) return null;
+
+        const cs = md.cellSize;
+        const margin = md.margin;
+        const h = cs * 0.866;
+
+        // Get edges for cellA and find which neighbor slot matches coordB
+        const { row, col, upward } = cellA;
+        const x = col * cs * 0.5 + margin;
+        const y = row * cs * 0.866 + margin;
+
+        let neighborCoords, edges;
+        if (upward) {
+            neighborCoords = [`${row + 1},${col}`, `${row},${col - 1}`, `${row},${col + 1}`];
+            edges = [
+                { x1: x, y1: y + h, x2: x + cs, y2: y + h },
+                { x1: x, y1: y + h, x2: x + cs / 2, y2: y },
+                { x1: x + cs / 2, y1: y, x2: x + cs, y2: y + h },
+            ];
+        } else {
+            neighborCoords = [`${row - 1},${col}`, `${row},${col - 1}`, `${row},${col + 1}`];
+            edges = [
+                { x1: x, y1: y, x2: x + cs, y2: y },
+                { x1: x, y1: y, x2: x + cs / 2, y2: y + h },
+                { x1: x + cs / 2, y1: y + h, x2: x + cs, y2: y },
+            ];
+        }
+
+        for (let i = 0; i < 3; i++) {
+            if (neighborCoords[i] === coordB) {
+                const e = edges[i];
+                return { x: (e.x1 + e.x2) / 2, y: (e.y1 + e.y2) / 2 };
+            }
+        }
+        return null;
     },
 
     _entryTailPoint() {
@@ -448,6 +515,464 @@ const GameRenderer = {
             }
         }
         return null;
+    },
+
+    /**
+     * Win fanfare sequence:
+     * Phase 1: Trail goes rainbow + 10x crawl speed
+     * Phase 2: After a beat, trail "slurps" into the logo (shrinks from entry end)
+     * Phase 3: Logo glows white, walls fade to white
+     */
+    _winTimers: [],
+    _winHexBg: null,
+
+    playWinFanfare() {
+        const trail = this.trailElement;
+        if (!trail) return;
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = this.svg;
+
+        // Hide player marker immediately
+        if (this.playerMarker) {
+            this.playerMarker.setAttribute('opacity', '0');
+        }
+
+        const totalLen = trail.getTotalLength();
+
+        // ── Win animation speed (single source of truth) ──
+        // 10x normal crawl speed
+        const winCrawlDuration = TRAIL.normalDuration / 10;
+        const winCrawlPxPerSec = TRAIL.cycle / winCrawlDuration;
+
+        const slurpSeconds = totalLen / winCrawlPxPerSec;
+        const slurpMs = slurpSeconds * 1000;
+
+        const pastelColors = [
+            '#ff8a95', '#ffca85', '#fff085', '#85f0a8',
+            '#85c8ff', '#b885ff', '#ff85c0',
+        ];
+
+        // ── Phase 1: SVG mask + rainbow segments ──
+        // The mask is a white dashed polyline (same shape as trail) — white = visible.
+        // The rainbow is solid colored segments underneath, clipped by the mask.
+        const segLen = 6;
+        const numSegs = Math.ceil(totalLen / segLen);
+
+        // Build <defs> with <mask>
+        const defs = document.createElementNS(NS, 'defs');
+        const mask = document.createElementNS(NS, 'mask');
+        mask.setAttribute('id', 'win-trail-mask');
+        mask.setAttribute('maskUnits', 'userSpaceOnUse');
+        // Set mask bounds very large to cover the full transform group coordinate space
+        mask.setAttribute('x', '-10000');
+        mask.setAttribute('y', '-10000');
+        mask.setAttribute('width', '20000');
+        mask.setAttribute('height', '20000');
+
+        // Clone the trail polyline as the mask shape
+        const maskPoly = trail.cloneNode(false);
+        maskPoly.setAttribute('stroke', 'white');
+        maskPoly.setAttribute('fill', 'none');
+        maskPoly.setAttribute('stroke-width', '9');
+        maskPoly.setAttribute('stroke-linecap', 'round');
+        maskPoly.setAttribute('stroke-linejoin', 'round');
+        maskPoly.setAttribute('stroke-dasharray', `${TRAIL.dash} ${TRAIL.gap}`);
+        maskPoly.classList.add('trail-animated');
+        maskPoly.style.animationDuration = `${winCrawlDuration}s`;
+        mask.appendChild(maskPoly);
+        defs.appendChild(mask);
+        svg.insertBefore(defs, svg.firstChild);
+        this._winDefs = defs;
+
+        // Build solid rainbow segments (no dashes — the mask handles that)
+        const rainbowGroup = document.createElementNS(NS, 'g');
+        rainbowGroup.setAttribute('mask', 'url(#win-trail-mask)');
+        const segments = [];
+
+        for (let i = 0; i < numSegs; i++) {
+            const d0 = i * segLen;
+            const d1 = Math.min((i + 1) * segLen, totalLen);
+            const p0 = trail.getPointAtLength(d0);
+            const p1 = trail.getPointAtLength(d1);
+            const line = document.createElementNS(NS, 'line');
+            line.setAttribute('x1', p0.x);
+            line.setAttribute('y1', p0.y);
+            line.setAttribute('x2', p1.x);
+            line.setAttribute('y2', p1.y);
+            line.setAttribute('stroke-width', '12');
+            line.setAttribute('stroke-linecap', 'round');
+            segments.push(line);
+            rainbowGroup.appendChild(line);
+        }
+
+        // Insert rainbow group where the trail is, then hide the original
+        if (trail.parentNode) {
+            trail.parentNode.insertBefore(rainbowGroup, trail);
+        }
+        trail.style.display = 'none';
+        this._winRainbowGroup = rainbowGroup;
+        this._winRainbowSegs = segments;
+
+        // Color-cycling via requestAnimationFrame — synced to dash crawl rate
+        let colorOffset = 0;
+        const rainbowLen = pastelColors.length * segLen * 3;
+
+        const updateRainbowColors = () => {
+            for (let i = 0; i < segments.length; i++) {
+                if (!segments[i].parentNode) continue;
+                const dist = i * segLen + colorOffset;
+                const t = ((dist % rainbowLen) + rainbowLen) % rainbowLen;
+                const colorIdx = (t / rainbowLen) * pastelColors.length;
+                const ci = Math.floor(colorIdx) % pastelColors.length;
+                segments[i].setAttribute('stroke', pastelColors[ci]);
+            }
+        };
+        updateRainbowColors();
+
+        let lastTime = performance.now();
+        const animateRainbow = (now) => {
+            const dt = (now - lastTime) / 1000;
+            lastTime = now;
+            colorOffset -= winCrawlPxPerSec * dt;
+            updateRainbowColors();
+            this._winRafId = requestAnimationFrame(animateRainbow);
+        };
+        this._winRafId = requestAnimationFrame(animateRainbow);
+
+        // ── Phase 2: (logo glow removed — hex bg glow handles this now) ──
+
+        // ── Phase 3: After a short beat, start the slurp ──
+        this._winTimers.push(setTimeout(() => {
+            // Color cycling + mask dash animation keep running during slurp
+
+            // Slurp: progressively remove segments from the entry end
+            const slurpInterval = slurpMs / segments.length;
+            let slurpIdx = 0;
+            const slurpTimer = setInterval(() => {
+                if (slurpIdx >= segments.length) {
+                    clearInterval(slurpTimer);
+                    if (this._winRafId) {
+                        cancelAnimationFrame(this._winRafId);
+                        this._winRafId = null;
+                    }
+                    if (rainbowGroup.parentNode) rainbowGroup.remove();
+                    this._winRainbowGroup = null;
+                    this._winRainbowSegs = null;
+                    return;
+                }
+                segments[slurpIdx].remove();
+                slurpIdx++;
+            }, slurpInterval);
+            this._winSlurpTimer = slurpTimer;
+
+            // Start hex background ~1.2s before slurp ends so its fade-in finishes with the slurp
+            const hexDelay = Math.max(0, slurpMs - 1200);
+            this._winTimers.push(setTimeout(() => {
+                this._addLogoBg();
+            }, hexDelay));
+
+            // ── Phase 4: After slurp completes ──
+            this._winTimers.push(setTimeout(() => {
+                if (trail.parentNode) trail.remove();
+                this.trailElement = null;
+                if (this._winDefs) {
+                    this._winDefs.remove();
+                    this._winDefs = null;
+                }
+
+                if (this.logoElement) {
+                    this.logoElement.setAttribute('fill', THEME.maze);
+                }
+
+                this._addGodRays();
+            }, slurpMs));
+        }, 500));
+    },
+
+    _addLogoBg() {
+        if (!this.logoElement) return;
+        const md = this.mazeData;
+        if (!md || md.centerHexRadius <= 0) return;
+        const NS = 'http://www.w3.org/2000/svg';
+
+        const cs = md.cellSize;
+        const margin = md.margin;
+        const stretch = md.stretch;
+        const mazeWidth = md.cols * cs * 0.5 + cs * 0.5;
+        const mazeHeight = md.rows * cs * 0.866;
+        const width = mazeHeight + 2 * margin;
+        const height = (mazeWidth + 2 * margin) * stretch;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        const hexR = md.centerHexRadius * cs;
+
+        const points = [];
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i - Math.PI / 6;
+            const px = cx + hexR * Math.cos(angle);
+            const py = cy + hexR * Math.sin(angle) * stretch;
+            points.push(`${px},${py}`);
+        }
+
+        const hex = document.createElementNS(NS, 'polygon');
+        hex.setAttribute('points', points.join(' '));
+        hex.setAttribute('fill', 'hsl(0, 70%, 88%)');
+        hex.setAttribute('opacity', '0');
+        hex.style.transition = 'opacity 1s ease';
+
+        this.svg.insertBefore(hex, this.logoElement);
+        this._winHexBg = hex;
+
+        hex.getBoundingClientRect();
+        hex.setAttribute('opacity', '1');
+
+        // Smooth hue rotation — soft pastels, slow cycle (12s full rotation)
+        // Also applies a matching color glow (drop-shadow) to the hex
+        const cycleDuration = 12;  // seconds per full hue rotation
+        let startTime = null;
+        const animateHue = (now) => {
+            if (!startTime) startTime = now;
+            const elapsed = (now - startTime) / 1000;
+            const hue = (elapsed / cycleDuration) * 360 % 360;
+            const fillColor = `hsl(${hue}, 70%, 88%)`;
+            const glowColor = `hsl(${hue}, 80%, 70%)`;
+            hex.setAttribute('fill', fillColor);
+            hex.style.filter = `drop-shadow(0 0 25px ${glowColor}) drop-shadow(0 0 50px ${glowColor})`;
+            this._winBgRafId = requestAnimationFrame(animateHue);
+        };
+        this._winBgRafId = requestAnimationFrame(animateHue);
+    },
+
+    _addGodRays() {
+        const md = this.mazeData;
+        if (!md) return;
+        const NS = 'http://www.w3.org/2000/svg';
+
+        const cs = md.cellSize;
+        const margin = md.margin;
+        const stretch = md.stretch;
+        const mazeWidth = md.cols * cs * 0.5 + cs * 0.5;
+        const mazeHeight = md.rows * cs * 0.866;
+        const width = mazeHeight + 2 * margin;
+        const height = (mazeWidth + 2 * margin) * stretch;
+        const cx = width / 2;
+        const cy = height / 2;
+
+        const reach = Math.min(width, height) / 2;
+        const numRays = 32;
+        // Wide rays — lots of overlap for rich additive blending
+        const rayHalfAngle = Math.PI / 16 * 0.5;
+
+        // Simple seeded PRNG for deterministic but random-looking values
+        const seed = 42;
+        let _rng = seed;
+        const rng = () => { _rng = (_rng * 16807 + 0) % 2147483647; return _rng / 2147483647; };
+
+        // Get or create <defs>
+        const defs = this.svg.querySelector('defs') || (() => {
+            const d = document.createElementNS(NS, 'defs');
+            this.svg.insertBefore(d, this.svg.firstChild);
+            return d;
+        })();
+
+        // Radial gradient mask: white at center (visible), black at edges (hidden)
+        // Opaque out to the logo hex radius, then fades to transparent by the maze edge
+        const hexR = md.centerHexRadius * cs;
+        const opaqueStop = Math.round((hexR / reach) * 100);
+        const fadeStop = 100;
+        const grad = document.createElementNS(NS, 'radialGradient');
+        grad.setAttribute('id', 'god-ray-fade');
+        grad.setAttribute('gradientUnits', 'userSpaceOnUse');
+        grad.setAttribute('cx', cx);
+        grad.setAttribute('cy', cy);
+        grad.setAttribute('r', reach);
+        const stop1 = document.createElementNS(NS, 'stop');
+        stop1.setAttribute('offset', `${opaqueStop}%`);
+        stop1.setAttribute('stop-color', 'white');
+        const stop2 = document.createElementNS(NS, 'stop');
+        stop2.setAttribute('offset', `${fadeStop}%`);
+        stop2.setAttribute('stop-color', 'black');
+        grad.appendChild(stop1);
+        grad.appendChild(stop2);
+        defs.appendChild(grad);
+        this._winRayGradient = grad;
+
+        // SVG mask using the radial gradient — fades rays from center outward
+        const fadeMask = document.createElementNS(NS, 'mask');
+        fadeMask.setAttribute('id', 'god-ray-mask');
+        fadeMask.setAttribute('maskUnits', 'userSpaceOnUse');
+        fadeMask.setAttribute('x', '0');
+        fadeMask.setAttribute('y', '0');
+        fadeMask.setAttribute('width', width);
+        fadeMask.setAttribute('height', height);
+        const maskRect = document.createElementNS(NS, 'rect');
+        maskRect.setAttribute('x', '0');
+        maskRect.setAttribute('y', '0');
+        maskRect.setAttribute('width', width);
+        maskRect.setAttribute('height', height);
+        maskRect.setAttribute('fill', 'url(#god-ray-fade)');
+        fadeMask.appendChild(maskRect);
+        defs.appendChild(fadeMask);
+        this._winRayMask = fadeMask;
+
+        // Container group: masked for radial fade, behind maze walls
+        // isolation: isolate creates a compositing boundary so rays screen-blend
+        // against each other within the group, producing brighter overlaps
+        const containerGroup = document.createElementNS(NS, 'g');
+        containerGroup.setAttribute('mask', 'url(#god-ray-mask)');
+        containerGroup.style.isolation = 'isolate';
+        containerGroup.setAttribute('opacity', '0');
+        containerGroup.style.transition = 'opacity 2s ease';
+
+        // Build rays with seeded random speeds, directions, and hue phases
+        const rayData = [];
+        for (let i = 0; i < numRays; i++) {
+            const baseAngle = (2 * Math.PI / numRays) * i;
+            // Random speed 2-10 deg/s, random direction, random hue phase
+            const speed = 2 + rng() * 8;
+            const dir = rng() < 0.5 ? -1 : 1;
+            const huePhase = rng() * 360;
+
+            const rayG = document.createElementNS(NS, 'g');
+            rayG.style.mixBlendMode = 'screen';
+
+            const a1 = baseAngle - rayHalfAngle;
+            const a2 = baseAngle + rayHalfAngle;
+            const x1 = cx + reach * Math.cos(a1);
+            const y1 = cy + reach * Math.sin(a1) * stretch;
+            const x2 = cx + reach * Math.cos(a2);
+            const y2 = cy + reach * Math.sin(a2) * stretch;
+
+            // Colored triangle — the mask handles the radial fade
+            const poly = document.createElementNS(NS, 'polygon');
+            poly.setAttribute('points', `${cx},${cy} ${x1},${y1} ${x2},${y2}`);
+
+            rayG.appendChild(poly);
+            containerGroup.appendChild(rayG);
+            rayData.push({ group: rayG, poly, speed, dir, huePhase, baseAngle });
+        }
+
+        // Insert BEFORE the transform group so maze walls render on top
+        this.svg.insertBefore(containerGroup, this.transformGroup);
+
+        this._winRayGroup = containerGroup;
+
+        // Fade in
+        containerGroup.getBoundingClientRect();
+        containerGroup.setAttribute('opacity', '1');
+
+        // Animate each ray independently
+        const cycleDuration = 10;
+        let startTime = null;
+
+        const animateRays = (now) => {
+            if (!startTime) startTime = now;
+            const elapsed = (now - startTime) / 1000;
+
+            for (const r of rayData) {
+                const angle = r.dir * r.speed * elapsed;
+                r.group.setAttribute('transform', `rotate(${angle}, ${cx}, ${cy})`);
+
+                const hue = ((elapsed / cycleDuration) * 360 + r.huePhase) % 360;
+                const color = `hsl(${hue}, 80%, 75%)`;
+                r.poly.setAttribute('fill', color);
+            }
+
+            this._winRayRafId = requestAnimationFrame(animateRays);
+        };
+        this._winRayRafId = requestAnimationFrame(animateRays);
+    },
+
+    resetFanfare() {
+        // Clear all pending timers
+        this._winTimers.forEach(t => clearTimeout(t));
+        this._winTimers = [];
+
+        // Cancel rainbow animation frame
+        if (this._winRafId) {
+            cancelAnimationFrame(this._winRafId);
+            this._winRafId = null;
+        }
+
+        // Cancel slurp interval
+        if (this._winSlurpTimer) {
+            clearInterval(this._winSlurpTimer);
+            this._winSlurpTimer = null;
+        }
+
+        // Remove mask defs
+        if (this._winDefs) {
+            this._winDefs.remove();
+            this._winDefs = null;
+        }
+
+        // Remove rainbow segments group
+        if (this._winRainbowGroup) {
+            this._winRainbowGroup.remove();
+            this._winRainbowGroup = null;
+            this._winRainbowSegs = null;
+        }
+
+        // Remove hex background
+        if (this._winHexBg) {
+            this._winHexBg.remove();
+            this._winHexBg = null;
+        }
+
+        // Cancel logo bg color cycling
+        if (this._winBgRafId) {
+            cancelAnimationFrame(this._winBgRafId);
+            this._winBgRafId = null;
+        }
+
+        // Remove god rays
+        if (this._winRayRafId) {
+            cancelAnimationFrame(this._winRayRafId);
+            this._winRayRafId = null;
+        }
+        if (this._winRayGroup) {
+            this._winRayGroup.remove();
+            this._winRayGroup = null;
+        }
+        if (this._winRayGradient) {
+            this._winRayGradient.remove();
+            this._winRayGradient = null;
+        }
+        if (this._winRayMask) {
+            this._winRayMask.remove();
+            this._winRayMask = null;
+        }
+
+        // Reset logo
+        if (this.logoElement) {
+            this.logoElement.setAttribute('fill', THEME.maze);
+        }
+
+        // Reset wall colors
+        if (this.transformGroup) {
+            const walls = this.transformGroup.querySelectorAll('line');
+            walls.forEach(w => {
+                w.style.transition = '';
+                w.style.stroke = THEME.maze;
+            });
+        }
+
+        // Reset player marker opacity
+        if (this.playerMarker) {
+            this.playerMarker.setAttribute('opacity', '1');
+        }
+
+        // Reset trail if it still exists
+        if (this.trailElement) {
+            this.trailElement.setAttribute('stroke', THEME.player);
+            this.trailElement.style.display = '';
+            this.trailElement.style.animation = '';
+            this.trailElement.style.strokeDasharray = '';
+            this.trailElement.style.strokeDashoffset = '';
+            this.trailElement.style.transition = '';
+            this.trailElement.classList.add('trail-animated');
+        }
     },
 };
 
@@ -650,7 +1175,7 @@ const GameStateManager = {
     },
     onWin() {
         PlayerController.locked = true;
-        alert('Congratulations! You solved the maze!');
+        GameRenderer.playWinFanfare();
     },
     onReset() {
         GameRenderer.reset();

@@ -128,11 +128,30 @@ kbd {
 
 /* ── Animated trail dashes ── */
 @keyframes trail-crawl {
-  to { stroke-dashoffset: -24; }
+  to { stroke-dashoffset: var(--trail-cycle-neg); }
 }
 
 .trail-animated {
-  animation: trail-crawl 1.5s linear infinite;
+  animation: trail-crawl var(--trail-duration) linear infinite;
+}
+
+/* ── Win fanfare: rainbow trail ── */
+@keyframes rainbow-shift {
+  to { transform: translateX(240px); }
+}
+
+/* ── Win fanfare: logo glow ── */
+@keyframes logo-glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 12px #6983ff); }
+  50%      { filter: drop-shadow(0 0 25px #6983ff); }
+}
+
+.logo-glow {
+  transition: filter 1s ease;
+}
+
+.logo-glow-pulse {
+  animation: logo-glow-pulse 1.5s ease-in-out infinite;
 }
 
 
