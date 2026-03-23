@@ -8,6 +8,8 @@ import {
     autoSlideBack,
 } from './game.logic.js';
 
+import { DIFFICULTY_TIERS, createPRNG, dateSeed, generateMaze } from './maze.gen.js';
+
 // ── Theme Colors ────────────────────────────────────────────
 const THEME = {
     player: '#ffffff',    // bright copper/orange — player marker & trail
@@ -77,6 +79,78 @@ const MazeData = {
         for (const g of data.goalCells) {
             this.goalCells.add(`${g[0]},${g[1]}`);
         }
+    },
+
+    loadFromObject(data) {
+        if (!data.cells || !data.passages || !data.entryCell || !data.goalCells) {
+            throw new Error(
+                'Invalid maze data: missing required fields (cells, passages, entryCell, goalCells)'
+            );
+        }
+
+        this.rows = data.rows;
+        this.cols = data.cols;
+        this.cellSize = data.cellSize;
+        this.centerHexRadius = data.centerHexRadius;
+        this.margin = data.margin;
+        this.stretch = data.stretch;
+
+        // Build cells Map keyed by "row,col"
+        this.cells = new Map();
+        for (const c of data.cells) {
+            const key = `${c.row},${c.col}`;
+            this.cells.set(key, { row: c.row, col: c.col, upward: c.upward });
+        }
+
+        // Build passages adjacency Map (both directions)
+        this.passages = new Map();
+        for (const [a, b] of data.passages) {
+            const keyA = `${a[0]},${a[1]}`;
+            const keyB = `${b[0]},${b[1]}`;
+            if (!this.passages.has(keyA)) this.passages.set(keyA, new Set());
+            if (!this.passages.has(keyB)) this.passages.set(keyB, new Set());
+            this.passages.get(keyA).add(keyB);
+            this.passages.get(keyB).add(keyA);
+        }
+
+        // Set entryCell as "row,col" string
+        this.entryCell = `${data.entryCell[0]},${data.entryCell[1]}`;
+
+        // Build goalCells Set of "row,col" strings
+        this.goalCells = new Set();
+        for (const g of data.goalCells) {
+            this.goalCells.add(`${g[0]},${g[1]}`);
+        }
+    },
+
+    exportObject() {
+        // Deduplicate passages: each undirected edge appears once
+        const seenPassages = new Set();
+        const passagesArray = [];
+        for (const [key, connectedSet] of this.passages) {
+            for (const nk of connectedSet) {
+                const pair = key < nk ? `${key}|${nk}` : `${nk}|${key}`;
+                if (!seenPassages.has(pair)) {
+                    seenPassages.add(pair);
+                    const [r1, c1] = key.split(',').map(Number);
+                    const [r2, c2] = nk.split(',').map(Number);
+                    passagesArray.push([[r1, c1], [r2, c2]]);
+                }
+            }
+        }
+
+        return {
+            rows: this.rows,
+            cols: this.cols,
+            cellSize: this.cellSize,
+            centerHexRadius: this.centerHexRadius,
+            margin: this.margin,
+            stretch: this.stretch,
+            cells: [...this.cells.values()].map(c => ({ row: c.row, col: c.col, upward: c.upward })),
+            passages: passagesArray,
+            entryCell: this.entryCell.split(',').map(Number),
+            goalCells: [...this.goalCells].map(k => k.split(',').map(Number)),
+        };
     },
 
     hasPassage(coordA, coordB) {
@@ -203,6 +277,7 @@ const GameRenderer = {
                     line.setAttribute('y2', e.y2);
                     line.setAttribute('stroke', THEME.maze);
                     line.setAttribute('stroke-width', '5');
+                    line.setAttribute('stroke-linecap', 'round');
                     g.appendChild(line);
                 }
             }
@@ -514,7 +589,7 @@ const GameRenderer = {
     _winTimers: [],
     _winHexBg: null,
 
-    playWinFanfare() {
+    playWinFanfare(onComplete) {
         const trail = this.trailElement;
         if (!trail) return;
         const NS = 'http://www.w3.org/2000/svg';
@@ -665,6 +740,7 @@ const GameRenderer = {
                 }
 
                 this._addGodRays();
+                if (onComplete) onComplete();
             }, slurpMs));
         }, 500));
     },
@@ -988,6 +1064,8 @@ const PlayerController = {
         // Check win condition
         if (MazeData.isGoal(this.currentCell)) {
             GameStateManager.onWin();
+        } else {
+            GameStateManager.onPlayerMove();
         }
     },
 
@@ -1003,41 +1081,472 @@ const PlayerController = {
         this.pathTrail = result.newTrail;
         GameRenderer.drawPlayerMarker(this.currentCell);
         GameRenderer.updateTrail(this.pathTrail);
+        GameStateManager.onPlayerMove();
+    },
+};
+
+// ── PuzzlePanel ─────────────────────────────────────────────
+const PuzzlePanel = {
+    container: null,
+    currentDate: null,
+    currentTierId: null,
+    expanded: true,
+    onTierSelect: null,
+    onDateChange: null,
+
+    // DOM element references (set during init)
+    _dateInput: null,
+    _nextBtn: null,
+    _todayBtn: null,
+    _tierBtns: [],
+    _dateLabel: null,
+    _diffLabel: null,
+
+    // ── Date helpers ────────────────────────────────────────
+    _formatDate(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    },
+
+    _parseDate(str) {
+        if (typeof str !== 'string') return null;
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return null;
+        const y = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10) - 1;
+        const d = parseInt(match[3], 10);
+        const date = new Date(y, m, d);
+        // Validate the date components round-trip correctly (catches Feb 30, etc.)
+        if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
+            return null;
+        }
+        return date;
+    },
+
+    _today() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    },
+
+    // ── Init: build DOM and wire handlers ───────────────────
+    init(date, tierId) {
+        this.container = document.getElementById('puzzle-panel');
+        this.currentDate = date;
+        this.currentTierId = tierId;
+
+        // Clear any existing content
+        this.container.innerHTML = '';
+
+        // Summary row
+        const summary = document.createElement('div');
+        summary.className = 'panel-summary';
+        this._dateLabel = document.createElement('span');
+        this._dateLabel.className = 'panel-date-label';
+        this._diffLabel = document.createElement('span');
+        this._diffLabel.className = 'panel-diff-label';
+        summary.appendChild(this._dateLabel);
+        summary.appendChild(this._diffLabel);
+        this.container.appendChild(summary);
+
+        // Controls wrapper
+        const controls = document.createElement('div');
+        controls.className = 'panel-controls';
+
+        // Tier buttons
+        const tiersDiv = document.createElement('div');
+        tiersDiv.className = 'panel-tiers';
+        this._tierBtns = [];
+        for (const tier of DIFFICULTY_TIERS) {
+            const btn = document.createElement('button');
+            btn.className = 'panel-tier-btn';
+            btn.dataset.tier = tier.id;
+            btn.textContent = tier.id.charAt(0).toUpperCase() + tier.id.slice(1);
+            btn.addEventListener('click', () => {
+                if (this.onTierSelect) this.onTierSelect(tier);
+            });
+            tiersDiv.appendChild(btn);
+            this._tierBtns.push(btn);
+        }
+        controls.appendChild(tiersDiv);
+
+        // Date nav row
+        const dateNav = document.createElement('div');
+        dateNav.className = 'panel-date-nav';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'panel-prev-btn';
+        prevBtn.textContent = '◀';
+        prevBtn.addEventListener('click', () => this._onPrevDate());
+
+        this._dateInput = document.createElement('input');
+        this._dateInput.type = 'text';
+        this._dateInput.className = 'panel-date-input';
+        this._dateInput.maxLength = 10;
+        this._dateInput.spellcheck = false;
+        this._dateInputHandled = false;
+        this._dateInput.addEventListener('blur', () => {
+            if (this._dateInputHandled) {
+                this._dateInputHandled = false;
+                return;
+            }
+            this._onDateInput(this._dateInput.value);
+        });
+        this._dateInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this._dateInputHandled = true;
+                this._onDateInput(this._dateInput.value);
+                this._dateInput.blur();
+            }
+        });
+
+        this._nextBtn = document.createElement('button');
+        this._nextBtn.className = 'panel-next-btn';
+        this._nextBtn.textContent = '▶';
+        this._nextBtn.addEventListener('click', () => this._onNextDate());
+
+        dateNav.appendChild(prevBtn);
+        dateNav.appendChild(this._dateInput);
+        dateNav.appendChild(this._nextBtn);
+        controls.appendChild(dateNav);
+
+        // Action buttons
+        const actions = document.createElement('div');
+        actions.className = 'panel-actions';
+
+        const randomBtn = document.createElement('button');
+        randomBtn.className = 'panel-random-btn';
+        randomBtn.textContent = 'Random Date';
+        randomBtn.addEventListener('click', () => this._onRandomDate());
+
+        this._todayBtn = document.createElement('button');
+        this._todayBtn.className = 'panel-today-btn';
+        this._todayBtn.textContent = "Today's Puzzle";
+        this._todayBtn.addEventListener('click', () => this._onTodayPuzzle());
+
+        actions.appendChild(randomBtn);
+        actions.appendChild(this._todayBtn);
+        controls.appendChild(actions);
+
+        this.container.appendChild(controls);
+
+        this.render();
+    },
+
+    // ── Render: sync DOM to current state ───────────────────
+    render() {
+        if (!this.container) return;
+
+        const dateStr = this._formatDate(this.currentDate);
+        const today = this._today();
+        const isToday = this._formatDate(today) === dateStr;
+
+        // Update date input (skip if user is actively editing)
+        if (this._dateInput && document.activeElement !== this._dateInput) {
+            this._dateInput.value = dateStr;
+        }
+
+        // Highlight active tier button
+        for (const btn of this._tierBtns) {
+            if (btn.dataset.tier === this.currentTierId) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        }
+
+        // Disable next-date button when date equals today
+        if (this._nextBtn) {
+            this._nextBtn.disabled = isToday;
+        }
+
+        // Show/hide "Today's Puzzle" button
+        if (this._todayBtn) {
+            this._todayBtn.style.display = isToday ? 'none' : '';
+        }
+
+        // Update compact summary labels
+        if (this._dateLabel) {
+            this._dateLabel.textContent = dateStr;
+        }
+        if (this._diffLabel) {
+            const tier = DIFFICULTY_TIERS.find(t => t.id === this.currentTierId);
+            this._diffLabel.textContent = tier
+                ? tier.id.charAt(0).toUpperCase() + tier.id.slice(1)
+                : '';
+        }
+    },
+
+    // ── Expand / Collapse ───────────────────────────────────
+    expand() {
+        this.expanded = true;
+        if (this.container) this.container.classList.remove('collapsed');
+    },
+
+    collapse() {
+        this.expanded = false;
+        if (this.container) this.container.classList.add('collapsed');
+    },
+
+    setExpanded(isExpanded) {
+        if (isExpanded) {
+            this.expand();
+        } else {
+            this.collapse();
+        }
+    },
+
+    // ── Date navigation handlers ────────────────────────────
+    _onPrevDate() {
+        const prev = new Date(this.currentDate);
+        prev.setDate(prev.getDate() - 1);
+        if (this.onDateChange) this.onDateChange(prev);
+    },
+
+    _onNextDate() {
+        const today = this._today();
+        const next = new Date(this.currentDate);
+        next.setDate(next.getDate() + 1);
+        if (next > today) return;
+        if (this.onDateChange) this.onDateChange(next);
+    },
+
+    _onDateInput(value) {
+        const parsed = this._parseDate(value);
+        if (!parsed) {
+            // Invalid — revert to current date
+            if (this._dateInput) {
+                this._dateInput.value = this._formatDate(this.currentDate);
+            }
+            return;
+        }
+        const today = this._today();
+        if (parsed > today) {
+            // Future date — revert
+            if (this._dateInput) {
+                this._dateInput.value = this._formatDate(this.currentDate);
+            }
+            return;
+        }
+        if (this.onDateChange) this.onDateChange(parsed);
+    },
+
+    _onRandomDate() {
+        const start = new Date(2025, 0, 1); // 2025-01-01
+        const today = this._today();
+        const diffMs = today.getTime() - start.getTime();
+        const diffDays = Math.floor(diffMs / 86400000);
+        const randomDayOffset = Math.floor(Math.random() * (diffDays + 1));
+        const randomDate = new Date(start);
+        randomDate.setDate(randomDate.getDate() + randomDayOffset);
+        if (this.onDateChange) this.onDateChange(randomDate);
+    },
+
+    _onTodayPuzzle() {
+        if (this.onDateChange) this.onDateChange(this._today());
     },
 };
 
 // ── GameStateManager ────────────────────────────────────────
 const GameStateManager = {
-    async init() {
+    currentTier: null,
+    currentDate: null,
+
+    init() {
+        const diffPref = this._readDifficultyPref();
+        const savedState = this._readSavedState();
+
+        if (savedState && this._shouldRestore(savedState)) {
+            this.currentTier = DIFFICULTY_TIERS.find(t => t.id === savedState.tierId)
+                               || this._defaultTier();
+            this.currentDate = this._parseDate(savedState.date);
+            this._generateAndRender();
+            PlayerController.currentCell = savedState.currentCell;
+            PlayerController.pathTrail = savedState.pathTrail;
+            GameRenderer.drawPlayerMarker(savedState.currentCell);
+            GameRenderer.updateTrail(savedState.pathTrail);
+        } else {
+            if (savedState) this._clearSavedState();
+            this.currentTier = DIFFICULTY_TIERS.find(t => t.id === diffPref)
+                               || this._defaultTier();
+            this.currentDate = this._today();
+            this._generateAndRender();
+        }
+
+        PuzzlePanel.init(this.currentDate, this.currentTier.id);
+        PuzzlePanel.onTierSelect = (tier) => this._onTierSelect(tier);
+        PuzzlePanel.onDateChange = (date) => this._onDateChange(date);
+        this._updatePanelState();
+
+        document.getElementById('reset-btn').addEventListener('click', () => this.onReset());
+        document.addEventListener('keydown', (e) => PlayerController.handleKeydown(e));
+    },
+
+    _onTierSelect(tier) {
+        this.currentTier = tier;
+        this._writeDifficultyPref(tier.id);
+        this._clearSavedState();
+        this._generateAndRender();
+        PuzzlePanel.currentTierId = tier.id;
+        PuzzlePanel.render();
+        this._updatePanelState();
+    },
+
+    _onDateChange(date) {
+        this.currentDate = date;
+        this._clearSavedState();
+        this._generateAndRender();
+        PuzzlePanel.currentDate = date;
+        PuzzlePanel.render();
+        this._updatePanelState();
+    },
+
+    _updatePanelState() {
+        const inProgress = PlayerController.pathTrail.length > 1;
+        if (inProgress) {
+            PuzzlePanel.collapse();
+        } else {
+            PuzzlePanel.expand();
+        }
+    },
+
+    _generateAndRender() {
+        const seed = dateSeed(this.currentDate);
+        const prng = createPRNG(seed);
         const container = document.getElementById('maze-container');
+
         try {
-            const indexResp = await fetch('data/index.json');
-            if (!indexResp.ok) {
-                throw new Error(`Failed to load maze index: ${indexResp.status}`);
-            }
-            const index = await indexResp.json();
-            if (!index.mazes || index.mazes.length === 0) {
-                throw new Error('No mazes available in index.json');
-            }
-            const mazeFile = index.mazes[0];
-            await MazeData.load(`data/${mazeFile}`);
+            const mazeData = generateMaze(this.currentTier.hexSide, this.currentTier.centerHexRadius, prng);
+            MazeData.loadFromObject(mazeData);
+
+            // Clean up previous renderer state before re-init
+            GameRenderer.reset();
+            container.innerHTML = '';
+
             GameRenderer.init(MazeData, container);
             GameRenderer.drawMaze();
             PlayerController.init(MazeData.entryCell);
-            document.addEventListener('keydown', (e) => PlayerController.handleKeydown(e));
-            document.getElementById('reset-btn').addEventListener('click', () => GameStateManager.onReset());
         } catch (err) {
             container.innerHTML =
-                `<p style="color:red;padding:1rem;">Error loading maze: ${err.message}</p>`;
+                `<p style="color:red;padding:1rem;">Error generating maze: ${err.message}</p>`;
         }
     },
+
+    onPlayerMove() {
+        this._writeSavedState();
+        this._updatePanelState();
+    },
+
     onWin() {
         PlayerController.locked = true;
-        GameRenderer.playWinFanfare();
+        GameRenderer.playWinFanfare(() => {
+            PuzzlePanel.expand();
+        });
+        this._clearSavedState();
     },
+
     onReset() {
         GameRenderer.reset();
         PlayerController.init(MazeData.entryCell);
+        this._clearSavedState();
+        this._updatePanelState();
+    },
+
+    // ── Difficulty preference persistence (Task 3.1) ────────
+    _readDifficultyPref() {
+        try {
+            return localStorage.getItem('maze-difficulty');
+        } catch {
+            return null;
+        }
+    },
+
+    _writeDifficultyPref(tierId) {
+        try {
+            localStorage.setItem('maze-difficulty', tierId);
+        } catch { /* ignore — private browsing */ }
+    },
+
+    // ── Saved state persistence (Task 3.2) ──────────────────
+    _readSavedState() {
+        try {
+            const raw = localStorage.getItem('maze-state');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            // Validate required fields
+            if (!parsed.date || !parsed.tierId || !parsed.currentCell
+                || !Array.isArray(parsed.pathTrail)) return null;
+            // pathTrail must be non-empty
+            if (parsed.pathTrail.length === 0) return null;
+            // Validate tierId matches a known tier
+            if (!DIFFICULTY_TIERS.some(t => t.id === parsed.tierId)) return null;
+            return parsed;
+        } catch {
+            return null;
+        }
+    },
+
+    _writeSavedState() {
+        const state = {
+            date: this._formatDate(this.currentDate),
+            tierId: this.currentTier.id,
+            currentCell: PlayerController.currentCell,
+            pathTrail: PlayerController.pathTrail,
+        };
+        try {
+            localStorage.setItem('maze-state', JSON.stringify(state));
+        } catch { /* ignore — private browsing */ }
+    },
+
+    _clearSavedState() {
+        try {
+            localStorage.removeItem('maze-state');
+        } catch { /* ignore — private browsing */ }
+    },
+
+    // ── Date helpers (Task 3.3) ─────────────────────────────
+    _today() {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    },
+
+    _parseDate(str) {
+        if (typeof str !== 'string') return null;
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return null;
+        const y = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10) - 1;
+        const d = parseInt(match[3], 10);
+        const date = new Date(y, m, d);
+        if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
+            return null;
+        }
+        return date;
+    },
+
+    _formatDate(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    },
+
+    // ── Staleness rules (Task 3.3) ──────────────────────────
+    _shouldRestore(savedState) {
+        const today = this._today();
+        const savedDate = this._parseDate(savedState.date);
+        const diffDays = Math.round((today - savedDate) / 86400000);
+        if (diffDays === 0) return true;    // Today's save → restore
+        if (diffDays === 1) return false;   // Yesterday's save → discard
+        if (diffDays >= 2) return true;     // Older save → restore
+        return false;
+    },
+
+    _defaultTier() {
+        return DIFFICULTY_TIERS.find(t => t.id === 'medium');
     },
 };
 
@@ -1046,4 +1555,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Expose internals for debug module ───────────────────────
-export { MazeData, GameRenderer, PlayerController, GameStateManager };
+export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager };
