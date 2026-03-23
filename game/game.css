@@ -369,3 +369,90 @@ kbd {
     min-width: 150px;
   }
 }
+
+/* ── About Panel (top-left) ── */
+#about-panel {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 20;
+}
+
+.about-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  color: var(--color-maze);
+  font-size: 0.85rem;
+  font-weight: bold;
+  transition: color 0.15s ease;
+}
+
+.about-trigger:hover {
+  color: #8fa3ff;
+}
+
+.about-logo {
+  display: block;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 4px rgba(105, 131, 255, 0.3));
+  transition: filter 0.2s ease;
+}
+
+#about-panel:hover .about-logo {
+  filter: drop-shadow(0 0 8px rgba(105, 131, 255, 0.6));
+}
+
+.about-link-text {
+  white-space: nowrap;
+}
+
+.about-content {
+  overflow: hidden;
+  opacity: 0;
+  max-height: 0;
+  background: var(--color-panel-bg);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin-top: 0.4rem;
+  width: 22ch;
+  pointer-events: none;
+  transition: opacity 0.2s ease, max-height 0s 0.2s, border-color 0s 0.2s;
+}
+
+#about-panel:hover .about-content {
+  max-height: 300px;
+  opacity: 1;
+  border-color: #333;
+  pointer-events: auto;
+  transition: opacity 0.2s ease, max-height 0s 0s, border-color 0s 0s;
+}
+
+.about-text {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* ── Responsive: About Panel ── */
+@media (max-width: 600px) {
+  #about-panel {
+    top: 0.4rem;
+    left: 0.4rem;
+  }
+
+  .about-content {
+    width: 18ch;
+  }
+
+  .about-logo {
+    width: 22px;
+    height: 25px;
+  }
+
+  .about-trigger {
+    font-size: 0.75rem;
+  }
+}

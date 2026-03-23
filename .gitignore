@@ -3,6 +3,7 @@ venv/
 __pycache__/
 *.svg
 !assets/*.svg
+!game/favicon.svg
 .hypothesis/
 .kiro/
 node_modules/
