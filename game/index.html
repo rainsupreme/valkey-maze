@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Valkey is aMazing</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <div id="about-panel">
+    <a href="https://valkey.io" target="_blank" rel="noopener" class="about-trigger">
+      <svg class="about-logo" width="28" height="32" viewBox="1.07 1.53 60.17 69.48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#6983ff" fill-rule="evenodd" d="M 13.482285 60.805337 L 1.072337 53.640450 L 1.072337 18.900520 L 31.157999 1.530556 L 61.243660 18.900520 L 61.243660 53.640450 L 31.157999 71.010414 L 20.548372 64.884944 L 20.548372 50.731296 L 20.548372 48.809864 L 14.993765 45.602910 L 14.993765 26.938060 L 31.157998 17.605635 L 47.322232 26.938060 L 47.322232 45.602910 L 34.703495 52.888341 L 34.703495 45.880508 C 39.359237 44.162831 42.114086 39.354893 41.241659 34.469690 C 40.369233 29.584486 36.120492 26.027288 31.157998 26.027288 C 26.195505 26.027288 21.946764 29.584486 21.074338 34.469690 C 20.201911 39.354893 22.956760 44.162831 27.612502 45.880508 L 27.612502 60.093515 L 31.157998 62.140509 L 53.562096 49.205497 L 53.562096 23.335473 L 31.157998 10.400461 L 8.753901 23.335473 L 8.753901 49.205497 L 13.482285 51.935431 L 13.482285 60.805337 Z M 31.157998 31.768045 C 33.644628 31.768045 35.660439 33.783856 35.660439 36.270485 C 35.660439 38.757114 33.644628 40.772925 31.157998 40.772925 C 28.671369 40.772925 26.655558 38.757114 26.655558 36.270485 C 26.655558 33.783856 28.671369 31.768045 31.157998 31.768045 Z" />
+      </svg>
+      <span class="about-link-text">Check out Valkey!</span>
+    </a>
+    <div class="about-content">
+      <p class="about-text">
+        Made by Rain Valentine 🌧️
+        <br><br>
+        Usually Rain works on optimizing data structures in Valkey, so that's where she gets serious. It's a fast open-source in-memory database - You should check it out! 😁
+      </p>
+    </div>
+  </div>
+
+  <div id="puzzle-panel"></div>
+
+  <div id="maze-container"></div>
+
+  <div id="controls">
+    <div id="legend">
+      <h3>Controls</h3>
+      <div class="legend-diagrams">
+        <!-- Single unified diagram: 6 visual directions with QWEASD keys -->
+        <div class="legend-diagram">
+          <svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140">
+            <defs>
+              <marker id="ah" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+                <polygon points="0,0 7,2.5 0,5" fill="#6983ff"/>
+              </marker>
+            </defs>
+            <!-- Center dot -->
+            <circle cx="70" cy="70" r="12" fill="#ff9b29" opacity="1"/>
+            <!-- B label: back/retrace -->
+            <text x="70" y="74" text-anchor="middle" fill="#fff" font-size="12" font-family="monospace" font-weight="bold">B</text>
+            <!-- W arrow: up -->
+            <line x1="70" y1="60" x2="70" y2="28" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="70" y="18" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">W</text>
+            <!-- S arrow: down -->
+            <line x1="70" y1="80" x2="70" y2="112" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="70" y="130" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">S</text>
+            <!-- Q arrow: upper-left -->
+            <line x1="60" y1="60" x2="34" y2="34" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="22" y="24" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">Q</text>
+            <!-- E arrow: upper-right -->
+            <line x1="80" y1="60" x2="106" y2="34" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="118" y="24" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">E</text>
+            <!-- A arrow: lower-left -->
+            <line x1="60" y1="80" x2="34" y2="106" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="22" y="124" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">A</text>
+            <!-- D arrow: lower-right -->
+            <line x1="80" y1="80" x2="106" y2="106" stroke="#6983ff" stroke-width="1.5" marker-end="url(#ah)"/>
+            <text x="118" y="124" text-anchor="middle" fill="#ccc" font-size="12" font-family="monospace" font-weight="bold">D</text>
+          </svg>
+          <span class="legend-label"><kbd>B</kbd> = retrace path</span>
+        </div>
+      </div>
+    </div>
+    <button id="reset-btn">Reset</button>
+  </div>
+
+  <img id="logo" src="../assets/valkey-logo-aligned.svg" alt="Valkey logo" hidden>
+
+  <script type="module" src="maze.gen.js"></script>
+  <script type="module" src="game.js"></script>
+  <script type="module" src="game.debug.js"></script>
+</body>
+</html>

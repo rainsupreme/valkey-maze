@@ -3,6 +3,15 @@ venv/
 __pycache__/
 *.svg
 !assets/*.svg
-*.html
+!game/favicon.svg
 .hypothesis/
 .kiro/
+node_modules/
+.ruff_cache/
+.pytest_cache/
+
+# Generated HTML files at project root (placemats, answer_key)
+/*.html
+
+# Generated maze data (re-generated via generate_maze_data.py)
+game/data/
