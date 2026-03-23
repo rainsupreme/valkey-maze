@@ -12,6 +12,7 @@ node_modules/
 
 # Generated HTML files at project root (placemats, answer_key)
 /*.html
+!index.html
 
 # Generated maze data (re-generated via generate_maze_data.py)
 game/data/
