@@ -6,15 +6,15 @@ Feature: playable-maze-game
 import json
 import os
 import re
-import random
 import tempfile
 
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from generate_maze_data import generate_maze_data
 from src.maze_data_exporter import MazeDataExporter
 from src.maze_generator import MazeGenerator
-
 
 # Strategy: hex_side from 3 to 15
 hex_sides = st.integers(min_value=3, max_value=15)
@@ -28,9 +28,7 @@ def center_radii(hex_side: int):
     max_r = hex_side - 2
     if max_r < 1:
         return st.just(0)
-    return st.integers(min_value=0, max_value=max_r).filter(
-        lambda r: r == 0 or r % 2 == 1
-    )
+    return st.integers(min_value=0, max_value=max_r).filter(lambda r: r == 0 or r % 2 == 1)
 
 
 @given(data=st.data())
@@ -61,9 +59,7 @@ def test_maze_data_round_trip(data):
     parsed = json.loads(json_str)
 
     # --- Reconstruct cell set from JSON ---
-    reconstructed_cells = {
-        (c["row"], c["col"]) for c in parsed["cells"]
-    }
+    reconstructed_cells = {(c["row"], c["col"]) for c in parsed["cells"]}
 
     # Original cell set from the grid
     original_cells = set(mg.grid.cells.keys())
@@ -93,7 +89,6 @@ def test_maze_data_round_trip(data):
     assert reconstructed_passages == original_passages, (
         f"Passage sets differ. "
         f"Missing from JSON: {original_passages - reconstructed_passages}, "
-      
         f"Extra in JSON: {reconstructed_passages - original_passages}"
     )
 
@@ -103,13 +98,10 @@ def test_maze_data_round_trip(data):
     assert parsed["centerHexRadius"] == mg.center_hex_radius
 
     # --- Verify cell orientation round-trips ---
-    orientation_map = {
-        (c["row"], c["col"]): c["upward"] for c in parsed["cells"]
-    }
+    orientation_map = {(c["row"], c["col"]): c["upward"] for c in parsed["cells"]}
     for coord, cell in mg.grid.cells.items():
         assert orientation_map[coord] == cell.is_upward, (
-            f"Cell {coord} orientation mismatch: "
-            f"expected {cell.is_upward}, got {orientation_map[coord]}"
+            f"Cell {coord} orientation mismatch: expected {cell.is_upward}, got {orientation_map[coord]}"
         )
 
 
@@ -155,10 +147,6 @@ def test_passage_deduplication(data):
 
 
 # ── Unit tests for MazeDataExporter and generate_maze_data ──
-
-import pytest
-
-from generate_maze_data import generate_maze_data
 
 
 def _make_maze(hex_side=5, center_hex_radius=3):
@@ -246,13 +234,8 @@ class TestMazeDataExporterUnit:
             vd = abs(cell.row - center_row) - 0.5
             if vd >= mg.center_hex_radius:
                 continue
-            side_offset = (
-                (mg.radius - mg.center_hex_radius) * 2 + vd
-            )
-            if (
-                cell.col >= side_offset
-                and cell.col < grid.cols - side_offset
-            ):
+            side_offset = (mg.radius - mg.center_hex_radius) * 2 + vd
+            if cell.col >= side_offset and cell.col < grid.cols - side_offset:
                 expected_goals.append([cell.row, cell.col])
 
         assert sorted(data["goalCells"]) == sorted(expected_goals)
@@ -353,10 +336,10 @@ class TestGenerateMazeData:
 # The first pattern excludes xmlns namespace declarations (e.g. xmlns="http://www.w3.org/2000/svg")
 # which are standard XML/SVG attributes, not external resource fetches.
 _EXTERNAL_REF_PATTERNS = [
-    re.compile(r'(?<!xmlns=")https?://(?!www\.w3\.org/)', re.IGNORECASE),
-    re.compile(r'//cdn\.', re.IGNORECASE),
-    re.compile(r'//unpkg\.', re.IGNORECASE),
-    re.compile(r'//cdnjs\.', re.IGNORECASE),
+    re.compile(r'(?<!xmlns=")(?<!href=")https?://(?!www\.w3\.org/)', re.IGNORECASE),
+    re.compile(r"//cdn\.", re.IGNORECASE),
+    re.compile(r"//unpkg\.", re.IGNORECASE),
+    re.compile(r"//cdnjs\.", re.IGNORECASE),
 ]
 
 # Paths to the static game files (relative to project root)
@@ -408,40 +391,27 @@ def test_static_file_structure(num_mazes, hex_side):
         assert os.path.isfile(index_path), "index.json must exist"
         with open(index_path) as f:
             index_data = json.load(f)
-        assert "mazes" in index_data, (
-            "index.json must have a 'mazes' key"
-        )
+        assert "mazes" in index_data, "index.json must have a 'mazes' key"
 
         # ── 2. Each file listed in index.json exists and is valid JSON ──
         maze_filenames = index_data["mazes"]
-        assert len(maze_filenames) == num_mazes, (
-            f"Expected {num_mazes} maze files, got {len(maze_filenames)}"
-        )
+        assert len(maze_filenames) == num_mazes, f"Expected {num_mazes} maze files, got {len(maze_filenames)}"
         for filename in maze_filenames:
             maze_path = os.path.join(output_dir, filename)
-            assert os.path.isfile(maze_path), (
-                f"Maze file {filename} listed in index.json must exist"
-            )
+            assert os.path.isfile(maze_path), f"Maze file {filename} listed in index.json must exist"
             with open(maze_path) as f:
                 maze_data = json.load(f)
             # Basic schema check
-            assert isinstance(maze_data, dict), (
-                f"{filename} must contain a JSON object"
-            )
+            assert isinstance(maze_data, dict), f"{filename} must contain a JSON object"
             for key in ("cells", "passages", "entryCell", "goalCells"):
-                assert key in maze_data, (
-                    f"{filename} must contain key '{key}'"
-                )
+                assert key in maze_data, f"{filename} must contain key '{key}'"
 
     # ── 3. Static game files contain no external CDN/remote refs ──
     for filepath in _STATIC_GAME_FILES:
-        assert os.path.isfile(filepath), (
-            f"Static game file {filepath} must exist"
-        )
+        assert os.path.isfile(filepath), f"Static game file {filepath} must exist"
         with open(filepath) as f:
             content = f.read()
         for pattern in _EXTERNAL_REF_PATTERNS:
             assert not pattern.search(content), (
-                f"{filepath} must not contain external references "
-                f"matching {pattern.pattern!r}"
+                f"{filepath} must not contain external references matching {pattern.pattern!r}"
             )

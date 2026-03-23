@@ -27,10 +27,7 @@ class MazeDataExporter:
         Raises ValueError if the maze has not been generated.
         """
         if self.maze.exit_cell is None:
-            raise ValueError(
-                "Maze has not been generated. "
-                "Call generate() before exporting."
-            )
+            raise ValueError("Maze has not been generated. Call generate() before exporting.")
 
         grid = self.maze.grid
 
@@ -48,9 +45,7 @@ class MazeDataExporter:
         passages: list[list[list[int]]] = []
         for cell in grid.cells.values():
             for neighbor in cell.passages:
-                pair = tuple(
-                    sorted([cell.coord, neighbor.coord])
-                )
+                pair = tuple(sorted([cell.coord, neighbor.coord]))
                 if pair not in seen:
                     seen.add(pair)
                     passages.append(
@@ -104,19 +99,11 @@ class MazeDataExporter:
 
         goal_cells: list[list[int]] = []
         for cell in grid.cells.values():
-            vertical_distance = (
-                abs(cell.row - center_row) - 0.5
-            )
+            vertical_distance = abs(cell.row - center_row) - 0.5
             if vertical_distance >= center_hex_radius:
                 continue
-            side_offset = (
-                (radius - center_hex_radius) * 2
-                + vertical_distance
-            )
-            if (
-                cell.col >= side_offset
-                and cell.col < grid.cols - side_offset
-            ):
+            side_offset = (radius - center_hex_radius) * 2 + vertical_distance
+            if cell.col >= side_offset and cell.col < grid.cols - side_offset:
                 goal_cells.append([cell.row, cell.col])
 
         return goal_cells
