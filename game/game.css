@@ -155,6 +155,123 @@ kbd {
 }
 
 
+/* ── D-Pad (Mobile Touch Controls) ── */
+/* Hex button size and spacing — change --hex-s to resize the whole pad */
+#dpad {
+  --hex-s: 52px;                          /* button width */
+  --hex-h: calc(var(--hex-s) * 0.866);   /* button height (s × √3/2) */
+  --hex-gap: 4px;                         /* gap between hexagons */
+  --hex-step-x: calc(var(--hex-s) * 0.75 + var(--hex-gap) * 0.866);
+  --hex-step-y: calc(var(--hex-h) + var(--hex-gap));
+
+  position: fixed;
+  bottom: 1rem;
+  left: 1rem;
+  /* 3 columns wide, 4 half-rows tall (top + 2 middle + bottom) */
+  width: calc(var(--hex-step-x) * 2 + var(--hex-s));
+  height: calc(var(--hex-step-y) * 2 + var(--hex-h));
+  max-height: 30vh;
+  z-index: 10;
+  touch-action: manipulation;
+}
+
+.dpad-btn {
+  position: absolute;
+  width: var(--hex-s);
+  height: var(--hex-h);
+  min-width: 44px;
+  min-height: 44px;
+  background: var(--color-panel-bg);
+  border: none;
+  color: var(--color-text);
+  font-size: 1rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  transition: background 0.05s ease;
+}
+
+/* Ring of 6 hexagons around an empty center hex.
+   Center of the pad = (step-x, step-y / 2 + hex-h / 2).
+   Each button is offset by one hex-step in the appropriate direction. */
+
+/* Top center */
+.dpad-btn[data-dir="up"] {
+  left: var(--hex-step-x);
+  top: 0;
+}
+
+/* Upper-left */
+.dpad-btn[data-dir="upper-left"] {
+  left: 0;
+  top: calc(var(--hex-step-y) * 0.5);
+}
+
+/* Upper-right */
+.dpad-btn[data-dir="upper-right"] {
+  left: calc(var(--hex-step-x) * 2);
+  top: calc(var(--hex-step-y) * 0.5);
+}
+
+/* Lower-left */
+.dpad-btn[data-dir="lower-left"] {
+  left: 0;
+  top: calc(var(--hex-step-y) * 1.5);
+}
+
+/* Lower-right */
+.dpad-btn[data-dir="lower-right"] {
+  left: calc(var(--hex-step-x) * 2);
+  top: calc(var(--hex-step-y) * 1.5);
+}
+
+/* Bottom center */
+.dpad-btn[data-dir="down"] {
+  left: var(--hex-step-x);
+  top: calc(var(--hex-step-y) * 2);
+}
+
+.dpad-btn-active {
+  background: rgba(105, 131, 255, 0.4);
+}
+
+/* Subtle border effect via box-shadow (clip-path hides normal borders) */
+.dpad-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+  border: 1px solid #444;
+  pointer-events: none;
+}
+
+/* ── Backtrack Button ── */
+#backtrack-btn {
+  background: var(--color-panel-bg);
+  color: var(--color-text);
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#backtrack-btn:hover {
+  background: rgba(105, 131, 255, 0.15);
+  border-color: var(--color-maze);
+}
+
+/* ── Hide legend on touch devices to save space ── */
+body.touch-device #legend {
+  display: none;
+}
+
 /* ── Small screens: shrink controls to avoid overlapping maze ── */
 @media (max-width: 600px) {
   #controls {
@@ -178,7 +295,7 @@ kbd {
   }
 
   #maze-container svg {
-    max-height: 90vh;
+    max-height: 65vh;
   }
 }
 

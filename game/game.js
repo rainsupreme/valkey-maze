@@ -1382,6 +1382,8 @@ const GameStateManager = {
 
         document.getElementById('reset-btn').addEventListener('click', () => this.onReset());
         document.addEventListener('keydown', (e) => PlayerController.handleKeydown(e));
+
+        TouchController.init();
     },
 
     _onTierSelect(tier) {
@@ -1550,9 +1552,124 @@ const GameStateManager = {
     },
 };
 
+// ── TouchController ─────────────────────────────────────────
+const TouchController = {
+    dpadContainer: null,
+    backtrackBtn: null,
+    _repeatTimer: null,
+    _repeatInterval: null,
+
+    init() {
+        if (!this._isTouchDevice()) return;
+        document.body.classList.add('touch-device');
+        this._createDpad();
+        this._createBacktrackButton();
+    },
+
+    _isTouchDevice() {
+        // Allow ?touch=1 query param to force-enable on desktop for testing
+        if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('touch') === '1') {
+            return true;
+        }
+        return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    },
+
+    _createDpad() {
+        const dpad = document.createElement('div');
+        dpad.id = 'dpad';
+        dpad.setAttribute('aria-label', 'Directional controls');
+
+        const directions = [
+            { dir: 'up',          label: 'Move up',          symbol: '▲' },
+            { dir: 'upper-left',  label: 'Move upper-left',  symbol: '◤' },
+            { dir: 'upper-right', label: 'Move upper-right', symbol: '◥' },
+            { dir: 'lower-left',  label: 'Move lower-left',  symbol: '◣' },
+            { dir: 'lower-right', label: 'Move lower-right', symbol: '◢' },
+            { dir: 'down',        label: 'Move down',        symbol: '▼' },
+        ];
+
+        for (const { dir, label, symbol } of directions) {
+            const btn = document.createElement('button');
+            btn.className = 'dpad-btn';
+            btn.dataset.dir = dir;
+            btn.setAttribute('aria-label', label);
+            btn.textContent = symbol;
+            btn.addEventListener('touchstart', (e) => this._onDirectionStart(dir, e));
+            btn.addEventListener('touchend', (e) => this._onTouchEnd(e));
+            btn.addEventListener('touchcancel', (e) => this._onTouchEnd(e));
+            btn.addEventListener('mousedown', (e) => this._onDirectionStart(dir, e));
+            btn.addEventListener('mouseup', (e) => this._onTouchEnd(e));
+            btn.addEventListener('mouseleave', (e) => this._onTouchEnd(e));
+            dpad.appendChild(btn);
+        }
+
+        this.dpadContainer = dpad;
+        document.body.appendChild(dpad);
+    },
+
+    _createBacktrackButton() {
+        const controls = document.getElementById('controls');
+        if (!controls) return;
+        const resetBtn = document.getElementById('reset-btn');
+
+        const btn = document.createElement('button');
+        btn.id = 'backtrack-btn';
+        btn.setAttribute('aria-label', 'Backtrack');
+        btn.textContent = '↩ Back';
+        btn.addEventListener('touchstart', (e) => this._onBacktrackStart(e));
+        btn.addEventListener('touchend', (e) => this._onTouchEnd(e));
+        btn.addEventListener('touchcancel', (e) => this._onTouchEnd(e));
+        btn.addEventListener('mousedown', (e) => this._onBacktrackStart(e));
+        btn.addEventListener('mouseup', (e) => this._onTouchEnd(e));
+        btn.addEventListener('mouseleave', (e) => this._onTouchEnd(e));
+
+        this.backtrackBtn = btn;
+        if (resetBtn) {
+            controls.insertBefore(btn, resetBtn);
+        } else {
+            controls.appendChild(btn);
+        }
+    },
+
+    _onDirectionStart(visualDir, event) {
+        event.preventDefault();
+        if (PlayerController.locked) return;
+        PlayerController.moveDirection(visualDir);
+        event.target.classList.add('dpad-btn-active');
+        this._startRepeat(() => PlayerController.moveDirection(visualDir));
+    },
+
+    _onBacktrackStart(event) {
+        event.preventDefault();
+        if (PlayerController.locked) return;
+        PlayerController.moveBack();
+        event.target.classList.add('dpad-btn-active');
+        this._startRepeat(() => PlayerController.moveBack());
+    },
+
+    _onTouchEnd(event) {
+        this._stopRepeat();
+        event.target.classList.remove('dpad-btn-active');
+    },
+
+    _startRepeat(actionFn) {
+        this._stopRepeat();
+        this._repeatTimer = setTimeout(() => {
+            this._repeatInterval = setInterval(actionFn, 150);
+        }, 300);
+    },
+
+    _stopRepeat() {
+        clearTimeout(this._repeatTimer);
+        clearInterval(this._repeatInterval);
+        this._repeatTimer = null;
+        this._repeatInterval = null;
+    },
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     GameStateManager.init();
 });
 
 // ── Expose internals for debug module ───────────────────────
-export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager };
+export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager, TouchController };
