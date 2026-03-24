@@ -17,8 +17,8 @@ describe('DIFFICULTY_TIERS', () => {
         expect(DIFFICULTY_TIERS).toHaveLength(4);
 
         const expected = [
-            { id: 'easy',      name: "I'm too young to cache", hexSide: 8,  centerHexRadius: 3  },
-            { id: 'medium',    name: "Hey, not too fast",      hexSide: 15, centerHexRadius: 6  },
+            { id: 'easy',      name: "I'm too young to cache", hexSide: 9,  centerHexRadius: 5  },
+            { id: 'medium',    name: "Hey, not too fast",      hexSide: 17, centerHexRadius: 9  },
             { id: 'hard',      name: "Query me plenty",        hexSide: 25, centerHexRadius: 11 },
             { id: 'nightmare', name: "Ultra-Valkey",           hexSide: 35, centerHexRadius: 15 },
         ];
