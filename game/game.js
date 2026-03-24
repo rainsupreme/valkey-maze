@@ -450,7 +450,11 @@ const GameRenderer = {
         polyline.setAttribute('stroke-linecap', 'round');
         polyline.setAttribute('stroke-linejoin', 'round');
         polyline.setAttribute('stroke-dasharray', `${TRAIL.dash} ${TRAIL.gap}`);
-        polyline.classList.add('trail-animated');
+        if (!GameStateManager.staticTrail) {
+            polyline.classList.add('trail-animated');
+        } else {
+            polyline.removeAttribute('stroke-dasharray');
+        }
         this.trailElement = polyline;
 
         // Insert trail before the player marker so marker renders on top
@@ -608,7 +612,7 @@ const GameRenderer = {
         const winCrawlPxPerSec = TRAIL.cycle / winCrawlDuration;
 
         const slurpSeconds = totalLen / winCrawlPxPerSec;
-        const slurpMs = slurpSeconds * 1000;
+        const slurpMs = (slurpSeconds * 1000) / (GameStateManager.staticTrail ? 5 : 1);
 
         const pastelColors = [
             '#ff8a95', '#ffca85', '#fff085', '#85f0a8',
@@ -637,8 +641,12 @@ const GameRenderer = {
         maskPoly.setAttribute('stroke-linecap', 'round');
         maskPoly.setAttribute('stroke-linejoin', 'round');
         maskPoly.setAttribute('stroke-dasharray', `${TRAIL.dash} ${TRAIL.gap}`);
-        maskPoly.classList.add('trail-animated');
-        maskPoly.style.animationDuration = `${winCrawlDuration}s`;
+        if (!GameStateManager.staticTrail) {
+            maskPoly.classList.add('trail-animated');
+            maskPoly.style.animationDuration = `${winCrawlDuration}s`;
+        } else {
+            maskPoly.removeAttribute('stroke-dasharray');
+        }
         mask.appendChild(maskPoly);
         defs.appendChild(mask);
         svg.insertBefore(defs, svg.firstChild);
@@ -673,31 +681,38 @@ const GameRenderer = {
         this._winRainbowGroup = rainbowGroup;
         this._winRainbowSegs = segments;
 
-        // Color-cycling via requestAnimationFrame — synced to dash crawl rate
-        let colorOffset = 0;
-        const rainbowLen = pastelColors.length * segLen * 3;
-
-        const updateRainbowColors = () => {
-            for (let i = 0; i < segments.length; i++) {
-                if (!segments[i].parentNode) continue;
-                const dist = i * segLen + colorOffset;
-                const t = ((dist % rainbowLen) + rainbowLen) % rainbowLen;
-                const colorIdx = (t / rainbowLen) * pastelColors.length;
-                const ci = Math.floor(colorIdx) % pastelColors.length;
-                segments[i].setAttribute('stroke', pastelColors[ci]);
+        if (GameStateManager.staticTrail) {
+            // Static mode: solid white segments, no color cycling
+            for (const seg of segments) {
+                seg.setAttribute('stroke', THEME.player);
             }
-        };
-        updateRainbowColors();
+        } else {
+            // Color-cycling via requestAnimationFrame — synced to dash crawl rate
+            let colorOffset = 0;
+            const rainbowLen = pastelColors.length * segLen * 3;
 
-        let lastTime = performance.now();
-        const animateRainbow = (now) => {
-            const dt = (now - lastTime) / 1000;
-            lastTime = now;
-            colorOffset -= winCrawlPxPerSec * dt;
+            const updateRainbowColors = () => {
+                for (let i = 0; i < segments.length; i++) {
+                    if (!segments[i].parentNode) continue;
+                    const dist = i * segLen + colorOffset;
+                    const t = ((dist % rainbowLen) + rainbowLen) % rainbowLen;
+                    const colorIdx = (t / rainbowLen) * pastelColors.length;
+                    const ci = Math.floor(colorIdx) % pastelColors.length;
+                    segments[i].setAttribute('stroke', pastelColors[ci]);
+                }
+            };
             updateRainbowColors();
+
+            let lastTime = performance.now();
+            const animateRainbow = (now) => {
+                const dt = (now - lastTime) / 1000;
+                lastTime = now;
+                colorOffset -= winCrawlPxPerSec * dt;
+                updateRainbowColors();
+                this._winRafId = requestAnimationFrame(animateRainbow);
+            };
             this._winRafId = requestAnimationFrame(animateRainbow);
-        };
-        this._winRafId = requestAnimationFrame(animateRainbow);
+        }
 
         // ── Phase 3: After a short beat, start the slurp ──
         this._winTimers.push(setTimeout(() => {
@@ -771,60 +786,9 @@ const GameRenderer = {
             points.push(`${px},${py}`);
         }
 
-        // ── Static SVG glow filter (GPU-friendly, no per-frame recomputation) ──
-        // Two blurred copies of the source graphic at different radii, merged
-        // underneath the sharp original. The blur kernel is fixed; only the
-        // hex fill colour changes per frame, which is a cheap
-        // attribute-only update the compositor can handle without re-rasterising
-        // the filter pipeline from scratch.
-        const defs = this.svg.querySelector('defs') || (() => {
-            const d = document.createElementNS(NS, 'defs');
-            this.svg.insertBefore(d, this.svg.firstChild);
-            return d;
-        })();
-
-        const filter = document.createElementNS(NS, 'filter');
-        filter.setAttribute('id', 'win-hex-glow');
-        // Generous filter region so the blur isn't clipped
-        filter.setAttribute('x', '-50%');
-        filter.setAttribute('y', '-50%');
-        filter.setAttribute('width', '200%');
-        filter.setAttribute('height', '200%');
-
-        // Inner glow layer (stdDeviation ≈ 25px / 2)
-        const blur1 = document.createElementNS(NS, 'feGaussianBlur');
-        blur1.setAttribute('in', 'SourceGraphic');
-        blur1.setAttribute('stdDeviation', '12');
-        blur1.setAttribute('result', 'glow1');
-
-        // Outer glow layer (stdDeviation ≈ 50px / 2)
-        const blur2 = document.createElementNS(NS, 'feGaussianBlur');
-        blur2.setAttribute('in', 'SourceGraphic');
-        blur2.setAttribute('stdDeviation', '25');
-        blur2.setAttribute('result', 'glow2');
-
-        // Merge: outer glow → inner glow → sharp original on top
-        const merge = document.createElementNS(NS, 'feMerge');
-        const mn1 = document.createElementNS(NS, 'feMergeNode');
-        mn1.setAttribute('in', 'glow2');
-        const mn2 = document.createElementNS(NS, 'feMergeNode');
-        mn2.setAttribute('in', 'glow1');
-        const mn3 = document.createElementNS(NS, 'feMergeNode');
-        mn3.setAttribute('in', 'SourceGraphic');
-        merge.appendChild(mn1);
-        merge.appendChild(mn2);
-        merge.appendChild(mn3);
-
-        filter.appendChild(blur1);
-        filter.appendChild(blur2);
-        filter.appendChild(merge);
-        defs.appendChild(filter);
-        this._winGlowFilter = filter;
-
         const hex = document.createElementNS(NS, 'polygon');
         hex.setAttribute('points', points.join(' '));
-        hex.setAttribute('fill', 'hsl(0, 70%, 88%)');
-        hex.setAttribute('filter', 'url(#win-hex-glow)');
+        hex.setAttribute('fill', '#ffffff');
         hex.setAttribute('opacity', '0');
         hex.style.transition = 'opacity 1s ease';
 
@@ -833,19 +797,6 @@ const GameRenderer = {
 
         hex.getBoundingClientRect();
         hex.setAttribute('opacity', '1');
-
-        // Smooth hue rotation — soft pastels, slow cycle (12s full rotation)
-        // Only the fill attribute changes per frame; the filter is static.
-        const cycleDuration = 12;
-        let startTime = null;
-        const animateHue = (now) => {
-            if (!startTime) startTime = now;
-            const elapsed = (now - startTime) / 1000;
-            const hue = (elapsed / cycleDuration) * 360 % 360;
-            hex.setAttribute('fill', `hsl(${hue}, 70%, 88%)`);
-            this._winBgRafId = requestAnimationFrame(animateHue);
-        };
-        this._winBgRafId = requestAnimationFrame(animateHue);
     },
 
     _addGodRays() {
@@ -1018,18 +969,6 @@ const GameRenderer = {
             this._winHexBg = null;
         }
 
-        // Remove hex glow SVG filter
-        if (this._winGlowFilter) {
-            this._winGlowFilter.remove();
-            this._winGlowFilter = null;
-        }
-
-        // Cancel logo bg color cycling
-        if (this._winBgRafId) {
-            cancelAnimationFrame(this._winBgRafId);
-            this._winBgRafId = null;
-        }
-
         // Remove god rays
         if (this._winRayRafId) {
             cancelAnimationFrame(this._winRayRafId);
@@ -1195,15 +1134,19 @@ const PuzzlePanel = {
         // Clear any existing content
         this.container.innerHTML = '';
 
-        // Summary row
+        // Summary row (always visible, acts as header)
         const summary = document.createElement('div');
         summary.className = 'panel-summary';
         this._dateLabel = document.createElement('span');
         this._dateLabel.className = 'panel-date-label';
         this._diffLabel = document.createElement('span');
         this._diffLabel.className = 'panel-diff-label';
+        const expandIcon = document.createElement('span');
+        expandIcon.className = 'expand-icon';
+        expandIcon.textContent = '▸';
         summary.appendChild(this._dateLabel);
         summary.appendChild(this._diffLabel);
+        summary.appendChild(expandIcon);
         this.container.appendChild(summary);
 
         // Controls wrapper
@@ -1283,6 +1226,19 @@ const PuzzlePanel = {
 
         actions.appendChild(randomBtn);
         actions.appendChild(this._todayBtn);
+
+        const resetBtn = document.createElement('button');
+        resetBtn.id = 'reset-btn';
+        resetBtn.textContent = 'Reset';
+        actions.appendChild(resetBtn);
+
+        this._staticTrailBtn = document.createElement('button');
+        this._staticTrailBtn.className = 'panel-random-btn';
+        this._staticTrailBtn.addEventListener('click', () => {
+            if (this.onStaticTrailToggle) this.onStaticTrailToggle();
+        });
+        actions.appendChild(this._staticTrailBtn);
+
         controls.appendChild(actions);
 
         this.container.appendChild(controls);
@@ -1320,6 +1276,12 @@ const PuzzlePanel = {
         // Show/hide "Today's Puzzle" button
         if (this._todayBtn) {
             this._todayBtn.style.display = isToday ? 'none' : '';
+        }
+
+        // Sync static trail toggle label
+        if (this._staticTrailBtn) {
+            const isStatic = GameStateManager.staticTrail;
+            this._staticTrailBtn.textContent = isStatic ? 'Animate Trail' : 'Static Trail';
         }
 
         // Update compact summary labels
@@ -1408,8 +1370,10 @@ const PuzzlePanel = {
 const GameStateManager = {
     currentTier: null,
     currentDate: null,
+    staticTrail: false,
 
     init() {
+        this.staticTrail = this._readStaticTrailPref();
         const diffPref = this._readDifficultyPref();
         const savedState = this._readSavedState();
 
@@ -1433,6 +1397,7 @@ const GameStateManager = {
         PuzzlePanel.init(this.currentDate, this.currentTier.id);
         PuzzlePanel.onTierSelect = (tier) => this._onTierSelect(tier);
         PuzzlePanel.onDateChange = (date) => this._onDateChange(date);
+        PuzzlePanel.onStaticTrailToggle = () => this._onStaticTrailToggle();
         this._updatePanelState();
 
         document.getElementById('reset-btn').addEventListener('click', () => this.onReset());
@@ -1524,6 +1489,38 @@ const GameStateManager = {
         try {
             localStorage.setItem('maze-difficulty', tierId);
         } catch { /* ignore — private browsing */ }
+    },
+
+    // ── Static trail preference ─────────────────────────────
+    _readStaticTrailPref() {
+        try {
+            const val = localStorage.getItem('maze-static-trail');
+            return val === null ? true : val === '1';
+        } catch {
+            return true;
+        }
+    },
+
+    _writeStaticTrailPref(isStatic) {
+        try {
+            localStorage.setItem('maze-static-trail', isStatic ? '1' : '0');
+        } catch { /* ignore — private browsing */ }
+    },
+
+    _onStaticTrailToggle() {
+        this.staticTrail = !this.staticTrail;
+        this._writeStaticTrailPref(this.staticTrail);
+        // Apply to existing trail element immediately
+        if (GameRenderer.trailElement) {
+            if (this.staticTrail) {
+                GameRenderer.trailElement.classList.remove('trail-animated');
+                GameRenderer.trailElement.removeAttribute('stroke-dasharray');
+            } else {
+                GameRenderer.trailElement.setAttribute('stroke-dasharray', `${TRAIL.dash} ${TRAIL.gap}`);
+                GameRenderer.trailElement.classList.add('trail-animated');
+            }
+        }
+        PuzzlePanel.render();
     },
 
     // ── Saved state persistence (Task 3.2) ──────────────────
@@ -1665,7 +1662,6 @@ const TouchController = {
     _createBacktrackButton() {
         const controls = document.getElementById('controls');
         if (!controls) return;
-        const resetBtn = document.getElementById('reset-btn');
 
         const btn = document.createElement('button');
         btn.id = 'backtrack-btn';
@@ -1679,11 +1675,7 @@ const TouchController = {
         btn.addEventListener('mouseleave', (e) => this._onTouchEnd(e));
 
         this.backtrackBtn = btn;
-        if (resetBtn) {
-            controls.insertBefore(btn, resetBtn);
-        } else {
-            controls.appendChild(btn);
-        }
+        controls.appendChild(btn);
     },
 
     _onDirectionStart(visualDir, event) {
