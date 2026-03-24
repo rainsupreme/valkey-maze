@@ -771,9 +771,60 @@ const GameRenderer = {
             points.push(`${px},${py}`);
         }
 
+        // ── Static SVG glow filter (GPU-friendly, no per-frame recomputation) ──
+        // Two blurred copies of the source graphic at different radii, merged
+        // underneath the sharp original. The blur kernel is fixed; only the
+        // hex fill colour changes per frame, which is a cheap
+        // attribute-only update the compositor can handle without re-rasterising
+        // the filter pipeline from scratch.
+        const defs = this.svg.querySelector('defs') || (() => {
+            const d = document.createElementNS(NS, 'defs');
+            this.svg.insertBefore(d, this.svg.firstChild);
+            return d;
+        })();
+
+        const filter = document.createElementNS(NS, 'filter');
+        filter.setAttribute('id', 'win-hex-glow');
+        // Generous filter region so the blur isn't clipped
+        filter.setAttribute('x', '-50%');
+        filter.setAttribute('y', '-50%');
+        filter.setAttribute('width', '200%');
+        filter.setAttribute('height', '200%');
+
+        // Inner glow layer (stdDeviation ≈ 25px / 2)
+        const blur1 = document.createElementNS(NS, 'feGaussianBlur');
+        blur1.setAttribute('in', 'SourceGraphic');
+        blur1.setAttribute('stdDeviation', '12');
+        blur1.setAttribute('result', 'glow1');
+
+        // Outer glow layer (stdDeviation ≈ 50px / 2)
+        const blur2 = document.createElementNS(NS, 'feGaussianBlur');
+        blur2.setAttribute('in', 'SourceGraphic');
+        blur2.setAttribute('stdDeviation', '25');
+        blur2.setAttribute('result', 'glow2');
+
+        // Merge: outer glow → inner glow → sharp original on top
+        const merge = document.createElementNS(NS, 'feMerge');
+        const mn1 = document.createElementNS(NS, 'feMergeNode');
+        mn1.setAttribute('in', 'glow2');
+        const mn2 = document.createElementNS(NS, 'feMergeNode');
+        mn2.setAttribute('in', 'glow1');
+        const mn3 = document.createElementNS(NS, 'feMergeNode');
+        mn3.setAttribute('in', 'SourceGraphic');
+        merge.appendChild(mn1);
+        merge.appendChild(mn2);
+        merge.appendChild(mn3);
+
+        filter.appendChild(blur1);
+        filter.appendChild(blur2);
+        filter.appendChild(merge);
+        defs.appendChild(filter);
+        this._winGlowFilter = filter;
+
         const hex = document.createElementNS(NS, 'polygon');
         hex.setAttribute('points', points.join(' '));
         hex.setAttribute('fill', 'hsl(0, 70%, 88%)');
+        hex.setAttribute('filter', 'url(#win-hex-glow)');
         hex.setAttribute('opacity', '0');
         hex.style.transition = 'opacity 1s ease';
 
@@ -784,16 +835,14 @@ const GameRenderer = {
         hex.setAttribute('opacity', '1');
 
         // Smooth hue rotation — soft pastels, slow cycle (12s full rotation)
+        // Only the fill attribute changes per frame; the filter is static.
         const cycleDuration = 12;
         let startTime = null;
         const animateHue = (now) => {
             if (!startTime) startTime = now;
             const elapsed = (now - startTime) / 1000;
             const hue = (elapsed / cycleDuration) * 360 % 360;
-            const fillColor = `hsl(${hue}, 70%, 88%)`;
-            const glowColor = `hsl(${hue}, 80%, 70%)`;
-            hex.setAttribute('fill', fillColor);
-            hex.style.filter = `drop-shadow(0 0 25px ${glowColor}) drop-shadow(0 0 50px ${glowColor})`;
+            hex.setAttribute('fill', `hsl(${hue}, 70%, 88%)`);
             this._winBgRafId = requestAnimationFrame(animateHue);
         };
         this._winBgRafId = requestAnimationFrame(animateHue);
@@ -815,8 +864,8 @@ const GameRenderer = {
         const cy = height / 2;
 
         const reach = Math.min(width, height) / 2;
-        const numRays = 32;
-        const rayHalfAngle = Math.PI / 16 * 0.5;
+        const numRays = 16;
+        const rayHalfAngle = Math.PI / 16;
 
         // Simple seeded PRNG for deterministic but random-looking values
         const seed = 42;
@@ -967,6 +1016,12 @@ const GameRenderer = {
         if (this._winHexBg) {
             this._winHexBg.remove();
             this._winHexBg = null;
+        }
+
+        // Remove hex glow SVG filter
+        if (this._winGlowFilter) {
+            this._winGlowFilter.remove();
+            this._winGlowFilter = null;
         }
 
         // Cancel logo bg color cycling
