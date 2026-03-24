@@ -416,8 +416,8 @@ describe('Feature: mobile-controls, CSS/layout constraints', () => {
         const bottomRule = cssContent.match(/#dpad\s*\{[^}]*bottom:\s*\d/s);
         expect(bottomRule).not.toBeNull();
 
-        const leftRule = cssContent.match(/#dpad\s*\{[^}]*left:\s*\d/s);
-        expect(leftRule).not.toBeNull();
+        const rightRule = cssContent.match(/#dpad\s*\{[^}]*right:\s*\d/s);
+        expect(rightRule).not.toBeNull();
     });
 });
 
