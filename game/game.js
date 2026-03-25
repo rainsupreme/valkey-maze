@@ -13,11 +13,22 @@ import {
 import { DIFFICULTY_TIERS, createPRNG, dateSeed, generateMaze } from './maze.gen.js';
 
 // ── Theme Colors ────────────────────────────────────────────
-const THEME = {
-    player: '#ffffff',    // bright copper/orange — player marker & trail
-    maze:   '#6983ff',    // vivid periwinkle — walls & logo
-    bg:     '#000000',    // black — SVG background
-};
+let THEME;
+
+/**
+ * Read theme colors from CSS custom properties (single source of truth).
+ * Called once during initialization; result is reused for all rendering.
+ */
+function readThemeColors() {
+    const style = getComputedStyle(document.documentElement);
+    const get = (prop, fallback) => style.getPropertyValue(prop).trim() || fallback;
+    return Object.freeze({
+        player: get('--color-player', '#ffffff'),
+        danger: get('--color-danger', '#ff9b29'),
+        maze:   get('--color-maze',   '#6983ff'),
+        bg:     get('--color-bg',     '#000000'),
+    });
+}
 
 // ── Trail Dash Configuration ────────────────────────────────
 // All dash-related values derive from these two numbers.
@@ -1339,6 +1350,7 @@ const GameStateManager = {
     staticTrail: false,
 
     init() {
+        THEME = readThemeColors();
         this.staticTrail = this._readStaticTrailPref();
         const diffPref = this._readDifficultyPref();
         const savedState = this._readSavedState();
@@ -1858,4 +1870,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Expose internals for debug module ───────────────────────
-export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager, TouchController, DragController };
+export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager, TouchController, DragController, readThemeColors };
