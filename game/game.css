@@ -207,11 +207,6 @@ kbd {
   animation: trail-crawl var(--trail-duration) linear infinite;
 }
 
-/* ── Win fanfare: rainbow trail ── */
-@keyframes rainbow-shift {
-  to { transform: translateX(240px); }
-}
-
 /* ── D-Pad (Mobile Touch Controls) ── */
 /* Hex button size and spacing — change --hex-s to resize the whole pad */
 #dpad {

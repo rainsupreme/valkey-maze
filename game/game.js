@@ -588,8 +588,8 @@ const GameRenderer = {
 
     /**
      * Win fanfare sequence:
-     * Phase 1: Trail goes rainbow + 10x crawl speed
-     * Phase 2: After a beat, trail "slurps" into the logo (shrinks from entry end)
+     * Phase 1: White dashed trail + 10x crawl speed
+     * Phase 2: Trail "slurps" into the logo (shrinks from entry end)
      * Phase 3: Logo glows white, walls fade to white
      */
     _winTimers: [],
@@ -616,12 +616,7 @@ const GameRenderer = {
         const slurpSeconds = totalLen / winCrawlPxPerSec;
         const slurpMs = (slurpSeconds * 1000) / (GameStateManager.staticTrail ? 5 : 1);
 
-        const pastelColors = [
-            '#ff8a95', '#ffca85', '#fff085', '#85f0a8',
-            '#85c8ff', '#b885ff', '#ff85c0',
-        ];
-
-        // ── Phase 1: SVG mask + rainbow segments ──
+        // ── Phase 1: SVG mask + white dashed segments ──
         const segLen = 6;
         const numSegs = Math.ceil(totalLen / segLen);
 
@@ -654,9 +649,9 @@ const GameRenderer = {
         svg.insertBefore(defs, svg.firstChild);
         this._winDefs = defs;
 
-        // Build solid rainbow segments (no dashes — the mask handles that)
-        const rainbowGroup = document.createElementNS(NS, 'g');
-        rainbowGroup.setAttribute('mask', 'url(#win-trail-mask)');
+        // Build solid white segments (no dashes — the mask handles that)
+        const slurpGroup = document.createElementNS(NS, 'g');
+        slurpGroup.setAttribute('mask', 'url(#win-trail-mask)');
         const segments = [];
 
         for (let i = 0; i < numSegs; i++) {
@@ -672,62 +667,30 @@ const GameRenderer = {
             line.setAttribute('stroke-width', '12');
             line.setAttribute('stroke-linecap', 'round');
             segments.push(line);
-            rainbowGroup.appendChild(line);
+            slurpGroup.appendChild(line);
         }
 
-        // Insert rainbow group where the trail is, then hide the original
+        // Insert slurp group where the trail is, then hide the original
         if (trail.parentNode) {
-            trail.parentNode.insertBefore(rainbowGroup, trail);
+            trail.parentNode.insertBefore(slurpGroup, trail);
         }
         trail.style.display = 'none';
-        this._winRainbowGroup = rainbowGroup;
+        this._winRainbowGroup = slurpGroup;
         this._winRainbowSegs = segments;
 
-        if (GameStateManager.staticTrail) {
-            // Static mode: solid white segments, no color cycling
-            for (const seg of segments) {
-                seg.setAttribute('stroke', THEME.player);
-            }
-        } else {
-            // Color-cycling via requestAnimationFrame — synced to dash crawl rate
-            let colorOffset = 0;
-            const rainbowLen = pastelColors.length * segLen * 3;
-
-            const updateRainbowColors = () => {
-                for (let i = 0; i < segments.length; i++) {
-                    if (!segments[i].parentNode) continue;
-                    const dist = i * segLen + colorOffset;
-                    const t = ((dist % rainbowLen) + rainbowLen) % rainbowLen;
-                    const colorIdx = (t / rainbowLen) * pastelColors.length;
-                    const ci = Math.floor(colorIdx) % pastelColors.length;
-                    segments[i].setAttribute('stroke', pastelColors[ci]);
-                }
-            };
-            updateRainbowColors();
-
-            let lastTime = performance.now();
-            const animateRainbow = (now) => {
-                const dt = (now - lastTime) / 1000;
-                lastTime = now;
-                colorOffset -= winCrawlPxPerSec * dt;
-                updateRainbowColors();
-                this._winRafId = requestAnimationFrame(animateRainbow);
-            };
-            this._winRafId = requestAnimationFrame(animateRainbow);
+        // White segments for both modes (same style as play-time crawl)
+        for (const seg of segments) {
+            seg.setAttribute('stroke', THEME.player);
         }
 
-        // ── Phase 3: After a short beat, start the slurp ──
+        // ── Phase 2: After a short beat, start the slurp ──
         this._winTimers.push(setTimeout(() => {
             const slurpInterval = slurpMs / segments.length;
             let slurpIdx = 0;
             const slurpTimer = setInterval(() => {
                 if (slurpIdx >= segments.length) {
                     clearInterval(slurpTimer);
-                    if (this._winRafId) {
-                        cancelAnimationFrame(this._winRafId);
-                        this._winRafId = null;
-                    }
-                    if (rainbowGroup.parentNode) rainbowGroup.remove();
+                    if (slurpGroup.parentNode) slurpGroup.remove();
                     this._winRainbowGroup = null;
                     this._winRainbowSegs = null;
                     return;
@@ -940,12 +903,6 @@ const GameRenderer = {
         this._winTimers.forEach(t => clearTimeout(t));
         this._winTimers = [];
 
-        // Cancel rainbow animation frame
-        if (this._winRafId) {
-            cancelAnimationFrame(this._winRafId);
-            this._winRafId = null;
-        }
-
         // Cancel slurp interval
         if (this._winSlurpTimer) {
             clearInterval(this._winSlurpTimer);
@@ -958,7 +915,7 @@ const GameRenderer = {
             this._winDefs = null;
         }
 
-        // Remove rainbow segments group
+        // Remove slurp segments group
         if (this._winRainbowGroup) {
             this._winRainbowGroup.remove();
             this._winRainbowGroup = null;
