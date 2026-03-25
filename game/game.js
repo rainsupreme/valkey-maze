@@ -684,44 +684,51 @@ const GameRenderer = {
         }
 
         // ── Phase 2: After a short beat, start the slurp ──
+        // The slurp itself drives Phase 3 (hex bg) and Phase 4 (god rays)
+        // instead of racing a parallel setTimeout against setInterval drift.
         this._winTimers.push(setTimeout(() => {
             const slurpInterval = slurpMs / segments.length;
             let slurpIdx = 0;
+            // Trigger hex bg fade-in exactly 1s (the CSS transition duration)
+            // before the slurp finishes, so the fade completes with the last segment.
+            const segsFor1s = Math.ceil(1000 / slurpInterval);
+            const hexBgThreshold = Math.max(0, segments.length - segsFor1s);
+            let hexBgStarted = false;
+
             const slurpTimer = setInterval(() => {
                 if (slurpIdx >= segments.length) {
                     clearInterval(slurpTimer);
                     if (slurpGroup.parentNode) slurpGroup.remove();
                     this._winRainbowGroup = null;
                     this._winRainbowSegs = null;
+
+                    // ── Phase 4: slurp actually done — fire next stage ──
+                    if (trail.parentNode) trail.remove();
+                    this.trailElement = null;
+                    if (this._winDefs) {
+                        this._winDefs.remove();
+                        this._winDefs = null;
+                    }
+
+                    if (this.logoElement) {
+                        this.logoElement.setAttribute('fill', THEME.maze);
+                    }
+
+                    this._addGodRays();
+                    if (onComplete) onComplete();
                     return;
                 }
+
+                // ── Phase 3: start hex bg fade once we cross the threshold ──
+                if (!hexBgStarted && slurpIdx >= hexBgThreshold) {
+                    hexBgStarted = true;
+                    this._addLogoBg();
+                }
+
                 segments[slurpIdx].remove();
                 slurpIdx++;
             }, slurpInterval);
             this._winSlurpTimer = slurpTimer;
-
-            // Start hex background ~1.2s before slurp ends so its fade-in finishes with the slurp
-            const hexDelay = Math.max(0, slurpMs - 1200);
-            this._winTimers.push(setTimeout(() => {
-                this._addLogoBg();
-            }, hexDelay));
-
-            // ── Phase 4: After slurp completes ──
-            this._winTimers.push(setTimeout(() => {
-                if (trail.parentNode) trail.remove();
-                this.trailElement = null;
-                if (this._winDefs) {
-                    this._winDefs.remove();
-                    this._winDefs = null;
-                }
-
-                if (this.logoElement) {
-                    this.logoElement.setAttribute('fill', THEME.maze);
-                }
-
-                this._addGodRays();
-                if (onComplete) onComplete();
-            }, slurpMs));
         }, 500));
     },
 
