@@ -41,6 +41,7 @@ body {
   width: auto;
   height: auto;
   display: block;
+  touch-action: none;
 }
 
 #controls {
@@ -135,6 +136,36 @@ body.touch-device .panel-header {
   font-size: 0.75rem;
   color: var(--color-text-muted);
   font-family: monospace;
+}
+
+#backtrack-legend-btn {
+  display: block;
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--color-bg-secondary, #1a1a2e);
+  color: var(--color-text-muted, #aaa);
+  border: 1px solid var(--color-border, #333);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, color 0.15s;
+}
+
+#backtrack-legend-btn:hover,
+#backtrack-legend-btn:focus-visible {
+  background: var(--color-accent, #ff9b29);
+  color: #fff;
+}
+
+#backtrack-legend-btn:active {
+  transform: scale(0.97);
+}
+
+body.touch-device #backtrack-legend-btn {
+  display: none;
 }
 
 kbd {
