@@ -1,6 +1,7 @@
 /* ── Theme Colors ── */
 :root {
-  --color-player: #ff9b29;      /* copper/orange — player marker & trail */
+  --color-player: #ffffff;      /* white — player marker & trail */
+  --color-danger: #ff9b29;      /* copper/orange — destructive actions */
   --color-maze: #6983ff;        /* periwinkle — walls & logo */
   --color-bg: #000000;          /* black — page & SVG background */
   --color-text: #ccc;           /* light gray — UI text */
@@ -183,7 +184,7 @@ kbd {
 
 #reset-btn {
   padding: 0.3rem 0.6rem;
-  background: var(--color-player);
+  background: var(--color-danger);
   color: #000;
   border: 1px solid #444;
   border-radius: 4px;
@@ -195,7 +196,7 @@ kbd {
 
 #reset-btn:hover {
   background: #b86e1f;
-  border-color: var(--color-player);
+  border-color: var(--color-danger);
 }
 
 /* ── Animated trail dashes ── */
@@ -205,11 +206,6 @@ kbd {
 
 .trail-animated {
   animation: trail-crawl var(--trail-duration) linear infinite;
-}
-
-/* ── Win fanfare: rainbow trail ── */
-@keyframes rainbow-shift {
-  to { transform: translateX(240px); }
 }
 
 /* ── D-Pad (Mobile Touch Controls) ── */
