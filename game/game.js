@@ -4,6 +4,8 @@ import {
     KEY_BINDINGS,
     resolveNeighbor,
     resolveVisualDirection,
+    angleToDirection,
+    bestPassableDirection,
     autoSlide,
     autoSlideBack,
 } from './game.logic.js';
@@ -1403,7 +1405,15 @@ const GameStateManager = {
         document.getElementById('reset-btn').addEventListener('click', () => this.onReset());
         document.addEventListener('keydown', (e) => PlayerController.handleKeydown(e));
 
+        const backtrackLegendBtn = document.getElementById('backtrack-legend-btn');
+        if (backtrackLegendBtn) {
+            backtrackLegendBtn.addEventListener('click', () => {
+                if (!PlayerController.locked) PlayerController.moveBack();
+            });
+        }
+
         TouchController.init();
+        DragController.init();
     },
 
     _onTierSelect(tier) {
@@ -1448,6 +1458,7 @@ const GameStateManager = {
             container.innerHTML = '';
 
             GameRenderer.init(MazeData, container);
+            DragController.init();
             GameRenderer.drawMaze();
             PlayerController.init(MazeData.entryCell);
         } catch (err) {
@@ -1714,9 +1725,173 @@ const TouchController = {
     },
 };
 
+// ── DragController ──────────────────────────────────────────
+const DragController = {
+    _active: false,
+    _pointerId: null,
+    _anchorX: 0,
+    _anchorY: 0,
+    _thresholdMultiplier: 1.0,
+
+    // Bound handlers stored as properties for add/removeEventListener
+    _boundOnPointerMove: null,
+    _boundOnPointerUp: null,
+
+    init() {
+        if (!('PointerEvent' in window)) return;
+        const svg = GameRenderer.svg;
+        if (!svg) return;
+
+        // Create bound handlers once
+        this._boundOnPointerMove = (e) => this._onPointerMove(e);
+        this._boundOnPointerUp = (e) => this._onPointerUp(e);
+
+        svg.addEventListener('pointerdown', (e) => this._onPointerDown(e));
+    },
+
+    _getThresholdPx() {
+        const svg = GameRenderer.svg;
+        if (!svg) return 30;
+        const viewBox = svg.viewBox.baseVal;
+        const rect = svg.getBoundingClientRect();
+        if (!viewBox || viewBox.width === 0 || viewBox.height === 0) return 30;
+        const scaleX = rect.width / viewBox.width;
+        const scaleY = rect.height / viewBox.height;
+        const scale = Math.min(scaleX, scaleY);
+        if (scale === 0) return 30;
+        return this._thresholdMultiplier * MazeData.cellSize / Math.sqrt(3) * scale;
+    },
+
+    _onPointerDown(event) {
+        if (PlayerController.locked) return;
+        if (event.target.closest('#dpad, #backtrack-btn, #backtrack-legend-btn')) return;
+        if (this._active) return;
+
+        this._active = true;
+        this._pointerId = event.pointerId;
+        this._anchorX = event.clientX;
+        this._anchorY = event.clientY;
+
+        const svg = GameRenderer.svg;
+        svg.setPointerCapture(event.pointerId);
+
+        svg.addEventListener('pointermove', this._boundOnPointerMove);
+        svg.addEventListener('pointerup', this._boundOnPointerUp);
+        svg.addEventListener('pointercancel', this._boundOnPointerUp);
+
+        event.preventDefault();
+    },
+
+    _onPointerUp(event) {
+        if (event.pointerId !== this._pointerId) return;
+        this._endSession();
+    },
+
+    _endSession() {
+        this._active = false;
+        const svg = GameRenderer.svg;
+        try {
+            if (svg && this._pointerId != null) {
+                svg.releasePointerCapture(this._pointerId);
+            }
+        } catch (_e) {
+            // Pointer may already be released
+        }
+        this._pointerId = null;
+
+        if (svg) {
+            svg.removeEventListener('pointermove', this._boundOnPointerMove);
+            svg.removeEventListener('pointerup', this._boundOnPointerUp);
+            svg.removeEventListener('pointercancel', this._boundOnPointerUp);
+        }
+    },
+
+    _isBacktrackDirection(visualDir) {
+        const trail = PlayerController.pathTrail;
+        if (trail.length < 2) return false;
+        const prevCell = trail[trail.length - 2];
+        const neighbor = resolveVisualDirection(PlayerController.currentCell, visualDir, MazeData.cells);
+        return neighbor === prevCell;
+    },
+
+    /** Return the previous cell coordinate on the trail, or null if at entry. */
+    _getBacktrackDirection() {
+        const trail = PlayerController.pathTrail;
+        if (trail.length < 2) return null;
+        return trail[trail.length - 2];
+    },
+
+    _onPointerMove(event) {
+        if (event.pointerId !== this._pointerId) return;
+        if (PlayerController.locked) {
+            this._endSession();
+            return;
+        }
+        event.preventDefault();
+
+        const dx = event.clientX - this._anchorX;
+        const dy = event.clientY - this._anchorY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < this._getThresholdPx()) return;
+
+        const cellBefore = PlayerController.currentCell;
+
+        // Collect all passable directions (forward + backtrack)
+        const ALL_DIRS = ['up', 'down', 'upper-left', 'upper-right', 'lower-left', 'lower-right'];
+        const passableDirs = [];
+        const backtrackDir = this._getBacktrackDirection();
+        for (const dir of ALL_DIRS) {
+            const neighbor = resolveVisualDirection(PlayerController.currentCell, dir, MazeData.cells);
+            if (!neighbor) continue;
+            if (neighbor === backtrackDir) {
+                passableDirs.push(dir); // backtrack is passable
+            } else if (MazeData.hasPassage(PlayerController.currentCell, neighbor)) {
+                passableDirs.push(dir);
+            }
+        }
+
+        // Pick the passable direction with the best dot-product match
+        const visualDir = bestPassableDirection(dx, dy, passableDirs);
+        if (!visualDir) return; // drag points away from all open passages
+
+        if (this._isBacktrackDirection(visualDir)) {
+            // Single-cell backtrack
+            if (PlayerController.pathTrail.length > 1) {
+                PlayerController.pathTrail.pop();
+                PlayerController.currentCell = PlayerController.pathTrail[PlayerController.pathTrail.length - 1];
+                GameRenderer.drawPlayerMarker(PlayerController.currentCell);
+                GameRenderer.updateTrail(PlayerController.pathTrail);
+                GameStateManager.onPlayerMove();
+            }
+        } else {
+            // Single-cell forward move
+            const neighbor = resolveVisualDirection(PlayerController.currentCell, visualDir, MazeData.cells);
+            if (neighbor && MazeData.hasPassage(PlayerController.currentCell, neighbor)) {
+                PlayerController.currentCell = neighbor;
+                PlayerController.pathTrail.push(neighbor);
+                GameRenderer.drawPlayerMarker(PlayerController.currentCell);
+                GameRenderer.updateTrail(PlayerController.pathTrail);
+                if (MazeData.isGoal(PlayerController.currentCell)) {
+                    GameStateManager.onWin();
+                } else {
+                    GameStateManager.onPlayerMove();
+                }
+            }
+        }
+
+        if (PlayerController.currentCell !== cellBefore) {
+            // Advance anchor by exactly one threshold along the drag vector,
+            // preserving any overshoot for the next move.
+            const threshPx = this._getThresholdPx();
+            this._anchorX += dx / distance * threshPx;
+            this._anchorY += dy / distance * threshPx;
+        }
+    },
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     GameStateManager.init();
 });
 
 // ── Expose internals for debug module ───────────────────────
-export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager, TouchController };
+export { MazeData, GameRenderer, PlayerController, PuzzlePanel, GameStateManager, TouchController, DragController };

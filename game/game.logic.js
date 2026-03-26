@@ -236,6 +236,79 @@ export function autoSlideBack(pathTrail, mazeData) {
 }
 
 /**
+ * Classify a drag delta (dx, dy) in screen coordinates (Y-down) into one
+ * of the 6 visual hex directions.
+ *
+ * Computes the angle via Math.atan2(dy, dx), normalizes to [0, 360°), then
+ * maps into 60° sectors:
+ *   lower-right:  [0°, 60°)
+ *   down:         [60°, 120°)
+ *   lower-left:   [120°, 180°)
+ *   upper-left:   [180°, 240°)
+ *   up:           [240°, 300°)
+ *   upper-right:  [300°, 360°)
+ *
+ * @param {number} dx - horizontal delta (positive = right)
+ * @param {number} dy - vertical delta (positive = down, screen coords)
+ * @returns {string} one of 'up','down','upper-left','upper-right','lower-left','lower-right'
+ */
+export function angleToDirection(dx, dy) {
+    const RAD_TO_DEG = 180 / Math.PI;
+    const raw = Math.atan2(dy, dx) * RAD_TO_DEG; // range [-180, 180]
+    const angle = ((raw % 360) + 360) % 360;     // normalize to [0, 360)
+
+    if (angle < 60)  return 'lower-right';
+    if (angle < 120) return 'down';
+    if (angle < 180) return 'lower-left';
+    if (angle < 240) return 'upper-left';
+    if (angle < 300) return 'up';
+    return 'upper-right';
+}
+
+/**
+ * Unit vectors for each visual direction in screen coords (Y-down).
+ * Each direction is at the center of its 60° sector.
+ */
+const DIR_VECTORS = {
+    'lower-right': { x: Math.cos(30 * Math.PI / 180),  y: Math.sin(30 * Math.PI / 180) },
+    'down':        { x: Math.cos(90 * Math.PI / 180),  y: Math.sin(90 * Math.PI / 180) },
+    'lower-left':  { x: Math.cos(150 * Math.PI / 180), y: Math.sin(150 * Math.PI / 180) },
+    'upper-left':  { x: Math.cos(210 * Math.PI / 180), y: Math.sin(210 * Math.PI / 180) },
+    'up':          { x: Math.cos(270 * Math.PI / 180), y: Math.sin(270 * Math.PI / 180) },
+    'upper-right': { x: Math.cos(330 * Math.PI / 180), y: Math.sin(330 * Math.PI / 180) },
+};
+
+/**
+ * Among a set of passable visual directions, pick the one whose unit vector
+ * has the highest dot product with the drag vector (dx, dy). Returns null if
+ * no direction has a positive projection (i.e. the drag points away from all
+ * available passages).
+ *
+ * This implements "wall sliding": if the player drags diagonally into a wall,
+ * the movement snaps to the nearest open passage that the drag has positive
+ * projection onto.
+ *
+ * @param {number} dx - drag delta X (screen coords)
+ * @param {number} dy - drag delta Y (screen coords)
+ * @param {string[]} passableDirs - array of visual direction strings that have open passages
+ * @returns {string|null} the best matching direction, or null
+ */
+export function bestPassableDirection(dx, dy, passableDirs) {
+    let bestDir = null;
+    let bestDot = 0; // must be strictly positive to count
+    for (const dir of passableDirs) {
+        const v = DIR_VECTORS[dir];
+        const dot = dx * v.x + dy * v.y;
+        if (dot > bestDot) {
+            bestDot = dot;
+            bestDir = dir;
+        }
+    }
+    return bestDir;
+}
+
+
+/**
  * Creates a new PlayerController state object.
  * This mirrors the PlayerController object in game.js but without renderer calls.
  */
