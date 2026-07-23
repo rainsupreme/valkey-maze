@@ -10,7 +10,9 @@ import {
     autoSlideBack,
 } from './game.logic.js';
 
-import { DIFFICULTY_TIERS, createPRNG, dateSeed, generateMaze } from './maze.gen.js';
+import { DIFFICULTY_TIERS } from './difficulty.js';
+import { createPRNG, dateSeed } from '../core/prng.js';
+import { generateMaze } from '../core/maze.js';
 
 // ── Theme Colors ────────────────────────────────────────────
 let THEME;

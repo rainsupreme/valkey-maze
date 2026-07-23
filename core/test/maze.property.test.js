@@ -1,12 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import {
-    createPRNG,
-    dateSeed,
-    buildHexGrid,
-    generateMaze,
-    DIFFICULTY_TIERS,
-} from '../maze.gen.js';
+import { createPRNG, dateSeed } from '../prng.js';
+import { buildHexGrid } from '../hex-grid.js';
+import { generateMaze, exportMazeJSON, parseMazeJSON } from '../maze.js';
+import { DIFFICULTY_TIERS } from '../../game/difficulty.js';
 
 // ── Property 1: PRNG determinism ────────────────────────────
 /**
@@ -316,8 +313,6 @@ describe('Property 7: Date seed is a pure function of date components', () => {
  *
  * **Validates: Requirements 10.1, 10.2, 10.3**
  */
-import { exportMazeJSON, parseMazeJSON } from '../maze.gen.js';
-
 describe('Property 8: Maze data serialization round-trip', () => {
     /**
      * Helper: normalize cells into a sorted set of "row,col,upward" strings
@@ -385,6 +380,9 @@ describe('Property 8: Maze data serialization round-trip', () => {
 
                     // GoalCells as sets (order doesn't matter)
                     expect(normalizeGoalCells(parsed.goalCells)).toEqual(normalizeGoalCells(original.goalCells));
+
+                    // solutionPath is ordered; must match exactly
+                    expect(parsed.solutionPath).toEqual(original.solutionPath);
                 }
             ),
             { numRuns: 100 }
@@ -465,6 +463,62 @@ describe('Property 9: Visual scaling consistency across difficulty tiers', () =>
                     expect(logoCenterY).toBe(hexBgCenterY);
                     expect(logoCenterX).toBe(godRayCenterX);
                     expect(logoCenterY).toBe(godRayCenterY);
+                }
+            ),
+            { numRuns: 100 }
+        );
+    });
+});
+
+
+// ── Property 10: Solution path validity ─────────────────────
+/**
+ * Property 10: Solution path validity
+ *
+ * For any valid parameters, the generated solutionPath must be a walk
+ * through the maze's passages: it starts at entryCell, every consecutive
+ * pair of cells is connected by a passage, it visits no cell twice, and
+ * (when there is a center region) it ends inside the goal region.
+ */
+describe('Property 10: Solution path validity', () => {
+    it('solutionPath is a duplicate-free passage walk from entryCell into the goal region', () => {
+        fc.assert(
+            fc.property(
+                fc.integer({ min: 3, max: 11 }),
+                fc.integer({ min: -2147483648, max: 2147483647 }),
+                (hexSide, seed) => {
+                    const centerHexRadius = Math.max(1, Math.floor(hexSide / 3));
+                    const prng = createPRNG(seed);
+                    const maze = generateMaze(hexSide, centerHexRadius, prng);
+
+                    const path = maze.solutionPath;
+                    expect(path.length).toBeGreaterThan(0);
+
+                    // Starts at the entry cell
+                    expect(path[0]).toEqual(maze.entryCell);
+
+                    // Ends inside the goal region
+                    const goalSet = new Set(maze.goalCells.map(([r, c]) => `${r},${c}`));
+                    const last = path[path.length - 1];
+                    expect(goalSet.has(`${last[0]},${last[1]}`)).toBe(true);
+
+                    // No cell visited twice
+                    const seen = new Set(path.map(([r, c]) => `${r},${c}`));
+                    expect(seen.size).toBe(path.length);
+
+                    // Every consecutive pair is a passage (undirected)
+                    const passageSet = new Set();
+                    for (const [[r1, c1], [r2, c2]] of maze.passages) {
+                        const a = `${r1},${c1}`;
+                        const b = `${r2},${c2}`;
+                        passageSet.add(a < b ? `${a}|${b}` : `${b}|${a}`);
+                    }
+                    for (let i = 1; i < path.length; i++) {
+                        const a = `${path[i - 1][0]},${path[i - 1][1]}`;
+                        const b = `${path[i][0]},${path[i][1]}`;
+                        const edge = a < b ? `${a}|${b}` : `${b}|${a}`;
+                        expect(passageSet.has(edge)).toBe(true);
+                    }
                 }
             ),
             { numRuns: 100 }
