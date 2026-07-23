@@ -2,6 +2,7 @@
 // Loaded separately so production game code stays clean.
 // Type cheat() in the browser console to enable, then press R to take the
 // optimal next step toward the goal. Type win() to auto-solve.
+// Type solution() to toggle the solution-path overlay.
 
 import { MazeData, GameRenderer, PlayerController, GameStateManager } from './game.js';
 
@@ -134,6 +135,17 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+function solution() {
+    const visible = GameRenderer.toggleSolution();
+    if (visible) {
+        console.log('%c🗺️ Solution overlay shown. Type solution() again to hide.', 'color: #0f0; font-size: 14px');
+    } else {
+        console.log('%c🗺️ Solution overlay hidden.', 'color: #ff0');
+    }
+    return visible;
+}
+
 // Expose to browser console
 window.cheat = cheat;
 window.win = win;
+window.solution = solution;
