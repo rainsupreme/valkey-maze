@@ -10,7 +10,7 @@ Requires Python 3.10+.
 # Install in editable mode (runtime dependency: svgwrite)
 pip install -e .
 
-# Include dev tools (pytest, hypothesis, ruff, mypy)
+# Include dev tools (pytest, hypothesis, ruff)
 pip install -e ".[dev]"
 ```
 

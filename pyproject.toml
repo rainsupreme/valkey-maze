@@ -9,7 +9,7 @@ requires-python = ">=3.10"
 dependencies = ["svgwrite"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "hypothesis"]
+dev = ["pytest", "ruff", "hypothesis"]
 
 [tool.ruff]
 line-length = 120

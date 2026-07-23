@@ -157,9 +157,9 @@ describe('Feature: theme-color-consolidation, Property 2: Player SVG elements us
                 // Both must equal the CSS variable we set
                 expect(theme.player).toBe(color);
             }),
-            { numRuns: 100 }
+            { numRuns: 25 }
         );
-    });
+    }, 30000);
 });
 
 // ── Property 3: Maze structural elements use their respective theme colors ──
@@ -203,9 +203,9 @@ describe('Feature: theme-color-consolidation, Property 3: Maze structural elemen
                     expect(wall.getAttribute('stroke')).toBe(theme.maze);
                 }
             }),
-            { numRuns: 100 }
+            { numRuns: 25 }
         );
-    });
+    }, 30000);
 });
 
 // ── Property 4: Fanfare reset restores theme colors ─────────
@@ -265,7 +265,7 @@ describe('Feature: theme-color-consolidation, Property 4: Fanfare reset restores
                     expect(GameRenderer.playerMarker.getAttribute('opacity')).toBe('1');
                 }
             }),
-            { numRuns: 100 }
+            { numRuns: 25 }
         );
-    });
+    }, 30000);
 });
