@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
-import { DIFFICULTY_TIERS } from '../maze.gen.js';
+import { DIFFICULTY_TIERS } from '../difficulty.js';
 
 // Set up minimal DOM before importing game.js (which runs DOMContentLoaded listener)
 beforeAll(() => {
