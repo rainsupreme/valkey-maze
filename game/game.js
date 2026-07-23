@@ -53,6 +53,7 @@ const MazeData = {
     passages: new Map(),    // Map<string, Set<string>>
     entryCell: '',          // "row,col"
     goalCells: new Set(),   // Set<string>
+    solutionPath: [],       // Array<"row,col"> entry -> goal
 
     async load(jsonUrl) {
         const resp = await fetch(jsonUrl);
@@ -94,6 +95,8 @@ const MazeData = {
         for (const g of data.goalCells) {
             this.goalCells.add(`${g[0]},${g[1]}`);
         }
+
+        this.solutionPath = (data.solutionPath || []).map(([r, c]) => `${r},${c}`);
     },
 
     loadFromObject(data) {
@@ -136,6 +139,8 @@ const MazeData = {
         for (const g of data.goalCells) {
             this.goalCells.add(`${g[0]},${g[1]}`);
         }
+
+        this.solutionPath = (data.solutionPath || []).map(([r, c]) => `${r},${c}`);
     },
 
     exportObject() {
@@ -189,6 +194,8 @@ const GameRenderer = {
     svgContainer: null,
     svg: null,
     transformGroup: null,
+    solutionElement: null,
+    solutionVisible: false,
 
     init(mazeData, svgContainer) {
         this.mazeData = mazeData;
@@ -482,6 +489,7 @@ const GameRenderer = {
 
     reset() {
         this.resetFanfare();
+        this.hideSolution();
         if (this.trailElement) {
             this.trailElement.remove();
             this.trailElement = null;
@@ -490,6 +498,58 @@ const GameRenderer = {
             this.playerMarker.remove();
             this.playerMarker = null;
         }
+    },
+
+    // ── Solution overlay (cheat mode) ───────────────────────
+
+    /** Draw the solution path as a dashed overlay under the player trail. */
+    showSolution() {
+        if (this.solutionVisible || !this.mazeData || this.mazeData.solutionPath.length < 2) {
+            return;
+        }
+        const NS = 'http://www.w3.org/2000/svg';
+        const points = this.mazeData.solutionPath.map(key => {
+            const [r, c] = key.split(',').map(Number);
+            const center = this._cellCenter(r, c);
+            return `${center.x},${center.y}`;
+        });
+
+        const polyline = document.createElementNS(NS, 'polyline');
+        polyline.setAttribute('class', 'solution-overlay');
+        polyline.setAttribute('points', points.join(' '));
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', THEME.danger);
+        polyline.setAttribute('stroke-width', '5');
+        polyline.setAttribute('stroke-linecap', 'round');
+        polyline.setAttribute('stroke-dasharray', '10 8');
+        polyline.setAttribute('opacity', '0.65');
+
+        // Under the player trail/marker so the player stays on top
+        if (this.trailElement) {
+            this.transformGroup.insertBefore(polyline, this.trailElement);
+        } else {
+            this.transformGroup.appendChild(polyline);
+        }
+        this.solutionElement = polyline;
+        this.solutionVisible = true;
+    },
+
+    hideSolution() {
+        if (this.solutionElement) {
+            this.solutionElement.remove();
+            this.solutionElement = null;
+        }
+        this.solutionVisible = false;
+    },
+
+    /** @returns {boolean} visibility after the toggle */
+    toggleSolution() {
+        if (this.solutionVisible) {
+            this.hideSolution();
+        } else {
+            this.showSolution();
+        }
+        return this.solutionVisible;
     },
 
     _cellCenter(row, col) {
@@ -1060,6 +1120,8 @@ const PlayerController = {
 
 // ── PuzzlePanel ─────────────────────────────────────────────
 const PuzzlePanel = {
+    onSolutionToggle: null,
+    solutionVisible: false,
     container: null,
     currentDate: null,
     currentTierId: null,
