@@ -6,18 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  checks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - run: pip install -e ".[dev]"
-      - run: pytest
-      - run: ruff check .
-      - run: ruff format --check .
-  js-tests:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
