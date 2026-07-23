@@ -16,3 +16,4 @@ node_modules/
 
 # Generated maze data (re-generated via generate_maze_data.py)
 game/data/
+*.egg-info/
