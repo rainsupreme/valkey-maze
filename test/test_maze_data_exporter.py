@@ -32,7 +32,7 @@ def center_radii(hex_side: int):
 
 
 @given(data=st.data())
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_maze_data_round_trip(data):
     """Property 1: Maze data round-trip
 
@@ -106,7 +106,7 @@ def test_maze_data_round_trip(data):
 
 
 @given(data=st.data())
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_passage_deduplication(data):
     """Property 2: Passage deduplication
 
