@@ -1,0 +1,201 @@
+/* ── Minesweeper page ────────────────────────────────────────────── */
+
+:root {
+  --color-player: #ffffff;
+  --color-danger: #ff9b29;
+  --color-maze: #6983ff;
+  --color-bg: #000000;
+  --color-text: #ccc;
+  --color-text-muted: #888;
+  --color-panel-bg: rgba(20, 20, 20, 0.9);
+  --ms-cell: #14141c;
+  --ms-clue-cell: #2a2a3a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Open Sans', Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+main {
+  width: 100%;
+  max-width: 640px;
+  padding: 3.5rem 0.75rem 1.5rem; /* top padding clears the nav strip */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.4rem;
+  color: #fff;
+}
+
+.tagline {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* ── Board ── */
+
+#board-container {
+  width: 100%;
+}
+
+#minesweeper-board {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: none; /* the board owns its pointer gestures */
+}
+
+#minesweeper-board .cell {
+  fill: var(--ms-cell);
+  stroke: var(--color-maze);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+#minesweeper-board .cell.clue {
+  fill: var(--ms-clue-cell);
+}
+
+#minesweeper-board .cell.unknown {
+  cursor: pointer;
+}
+
+#minesweeper-board .cell.unknown:hover:not(.win-lit) {
+  fill: #1e2a50;
+}
+
+#minesweeper-board .mark .mine-flag,
+#minesweeper-board .mark .safe-mark {
+  display: none;
+  pointer-events: none;
+}
+
+#minesweeper-board .mark.is-mine .mine-flag {
+  display: block;
+  fill: var(--color-danger);
+}
+
+#minesweeper-board .mark.is-safe .safe-mark {
+  display: block;
+  fill: var(--color-text-muted);
+}
+
+#minesweeper-board .hole {
+  fill: var(--ms-cell);
+  stroke: var(--color-maze);
+  stroke-width: 1.5;
+}
+
+#minesweeper-board .logo {
+  fill: var(--color-maze);
+  pointer-events: none;
+}
+
+#minesweeper-board .num {
+  fill: var(--color-player);
+  font-family: Arial, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+#minesweeper-board .num.clue-num {
+  font-weight: bold;
+  fill: var(--color-danger);
+}
+
+#minesweeper-board .solution-overlay polygon {
+  fill: none;
+  stroke: var(--color-danger);
+  stroke-width: 3;
+  stroke-dasharray: 6 4;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+/* Win wave: path cells light up periwinkle in sequence (delay set in JS) */
+#minesweeper-board .cell.win-lit {
+  fill: var(--color-maze);
+  transition: fill 0.3s ease;
+}
+
+#minesweeper-board .num.win-lit {
+  fill: #000;
+  transition: fill 0.3s ease;
+}
+
+#minesweeper-board .logo.win-lit {
+  fill: var(--color-player);
+  transition: fill 0.4s ease;
+}
+
+/* ── Controls ── */
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+#reset-btn {
+  padding: 0.3rem 0.6rem;
+  background: var(--color-danger);
+  color: #000;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#reset-btn:hover {
+  background: #b86e1f;
+}
+
+.daily-note {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+#win-banner {
+  margin-top: 0.6rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-panel-bg);
+  color: var(--color-maze);
+  border: 1px solid var(--color-maze);
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+#win-banner.hidden {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  h1 { font-size: 1.15rem; }
+  .tagline { font-size: 0.75rem; }
+}
+
+.status-row {
+  margin-top: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
