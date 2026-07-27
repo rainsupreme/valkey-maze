@@ -105,22 +105,22 @@ export function renderSignpostsSVG(puzzle, options = {}) {
         const key = `${q},${r}`;
         const { x, y } = center(q, r);
         const dir = arrowByKey.get(key);
-        const arrowY = y + size * 0.33; // lower half; numbers sit above
 
         if (dir === null) {
             // Goal cell: small hexagon marker instead of an arrow
-            const goalPoints = hexCorners(x, arrowY, size * 0.2)
+            const goalPoints = hexCorners(x, y, size * 0.24)
                 .map(([px, py]) => `${round2(px)},${round2(py)}`).join(' ');
             parts.push(`<polygon class="goal-marker" points="${goalPoints}" fill="black"/>`);
         } else {
-            // Chevron arrow pointing +x, rotated to the ray direction
+            // Chevron arrow pointing +x, rotated to the ray direction,
+            // centered in the cell; the number renders above it
             const a = size * 0.34;
             const arrow =
                 `M ${-a} ${-a * 0.45} L ${a * 0.15} ${-a * 0.45} L ${a * 0.15} ${-a * 0.85}` +
                 ` L ${a} 0 L ${a * 0.15} ${a * 0.85} L ${a * 0.15} ${a * 0.45} L ${-a} ${a * 0.45} Z`;
             parts.push(
                 `<path class="arrow" d="${arrow}" fill="black"` +
-                ` transform="translate(${round2(x)},${round2(arrowY)}) rotate(${round2(directionAngle(dir))})"/>`
+                ` transform="translate(${round2(x)},${round2(y)}) rotate(${round2(directionAngle(dir))})"/>`
             );
         }
 
@@ -128,7 +128,7 @@ export function renderSignpostsSVG(puzzle, options = {}) {
         if (isClue || opts.showSolution) {
             const value = isClue ? clueByKey.get(key) : numberByKey.get(key);
             parts.push(
-                `<text class="${isClue ? 'clue' : 'number'}" x="${round2(x)}" y="${round2(y - size * 0.22)}"` +
+                `<text class="${isClue ? 'clue' : 'number'}" x="${round2(x)}" y="${round2(y - size * 0.42)}"` +
                 ` text-anchor="middle" font-size="${fontSize}" font-family="Arial"` +
                 `${isClue ? ' font-weight="bold"' : ''}>${value}</text>`
             );
