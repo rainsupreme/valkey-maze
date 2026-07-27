@@ -123,9 +123,20 @@ h1 {
   pointer-events: none;
 }
 
-#rikudo-board.solved .cell.on-path {
-  fill: #24512c;
-  transition: fill 0.4s;
+/* Win wave: path cells light up periwinkle in sequence (delay set in JS) */
+#rikudo-board .cell.win-lit {
+  fill: var(--color-maze);
+  transition: fill 0.3s ease;
+}
+
+#rikudo-board .num.win-lit {
+  fill: #000;
+  transition: fill 0.3s ease;
+}
+
+#rikudo-board .logo.win-lit {
+  fill: var(--color-player);
+  transition: fill 0.4s ease;
 }
 
 /* ── Controls ── */
@@ -161,8 +172,9 @@ h1 {
 #win-banner {
   margin-top: 0.6rem;
   padding: 0.5rem 1rem;
-  background: #24512c;
-  color: #fff;
+  background: var(--color-panel-bg);
+  color: var(--color-maze);
+  border: 1px solid var(--color-maze);
   border-radius: 6px;
   font-weight: bold;
 }
