@@ -1,0 +1,48 @@
+/* ── Site nav: floating hex strip (top center) ─────────────── */
+
+#site-nav {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.5rem;
+  z-index: 50;
+  font-family: 'Open Sans', Arial, sans-serif;
+}
+
+.nav-hex {
+  /* Elongated pointy-top hexagon (hex pill) */
+  clip-path: polygon(12% 0%, 88% 0%, 100% 50%, 88% 100%, 12% 100%, 0% 50%);
+  padding: 0.45rem 1.3rem;
+  background: var(--color-panel-bg, rgba(20, 20, 20, 0.9));
+  color: var(--color-text, #ccc);
+  border: none;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.nav-hex:hover {
+  color: #fff;
+  background: rgba(40, 40, 60, 0.95);
+}
+
+.nav-hex.nav-current {
+  background: var(--color-maze, #6983ff);
+  color: #000;
+}
+
+@media (max-width: 600px) {
+  #site-nav {
+    top: 0.4rem;
+    gap: 0.35rem;
+  }
+  .nav-hex {
+    padding: 0.35rem 0.9rem;
+    font-size: 0.75rem;
+  }
+}
