@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Valkey Minesweeper</title>
+  <link rel="icon" href="../game/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../site/nav.css">
+  <link rel="stylesheet" href="../site/about.css">
+  <link rel="stylesheet" href="minesweeper.css">
+</head>
+<body>
+  <main>
+    <h1>Minesweeper</h1>
+    <p class="tagline">Find the evicted keys! Numbers count mines in touching cells. Tap to cycle: ⬢ mine → · safe → blank.</p>
+
+    <div id="board-container"></div>
+
+    <div class="status-row">
+      <span id="mine-counter"></span>
+    </div>
+
+    <div id="win-banner" class="hidden">🎉 All mines found! Come back tomorrow for a new puzzle.</div>
+
+    <div class="controls-row">
+      <button id="reset-btn">Reset</button>
+      <span class="daily-note">Daily puzzle — same for everyone, new at midnight</span>
+    </div>
+  </main>
+
+  <script type="module" src="../site/nav.js"></script>
+  <script type="module" src="../site/about.js"></script>
+  <script type="module" src="minesweeper.js"></script>
+</body>
+</html>
