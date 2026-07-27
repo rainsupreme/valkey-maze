@@ -11,6 +11,7 @@
 export const PUZZLES = [
     { id: 'maze', name: 'Maze', dir: 'game' },
     { id: 'rikudo', name: 'Rikudo', dir: 'rikudo' },
+    { id: 'signposts', name: 'Signposts', dir: 'signposts' },
 ];
 
 /**
