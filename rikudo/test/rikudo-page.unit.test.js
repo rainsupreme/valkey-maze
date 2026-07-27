@@ -3,7 +3,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
  * Page-level tests for the Rikudo controller: board construction,
- * number rendering, win banner, reset, and the solution() cheat.
+ * edge drawing/erasing, forced-number rendering, win banner, reset,
+ * persistence, and the solution() cheat.
  */
 
 let Rikudo;
@@ -33,6 +34,19 @@ function solutionKeys() {
     return Rikudo.puzzle.solutionPath.map(([q, r]) => `${q},${r}`);
 }
 
+async function logic() {
+    return import('../rikudo.logic.js');
+}
+
+/** Draw solution edges [from, to) through the controller. */
+async function drawRun(fromIdx, toIdx) {
+    const { addEdge } = await logic();
+    const keys = solutionKeys();
+    for (let i = fromIdx; i < toIdx; i++) {
+        Rikudo._apply(addEdge(Rikudo.board, Rikudo.edges, keys[i], keys[i + 1]));
+    }
+}
+
 describe('Rikudo page', () => {
     it('builds one polygon per cell plus the hole', () => {
         const polys = document.querySelectorAll('#rikudo-board polygon');
@@ -40,81 +54,79 @@ describe('Rikudo page', () => {
         expect(document.querySelectorAll('#rikudo-board .hole').length).toBe(1);
     });
 
-    it('shows clue numbers and starts the path at clue 1', () => {
-        const clueTexts = [...document.querySelectorAll('#rikudo-board .clue-num')]
-            .map(t => Number(t.textContent));
-        expect(clueTexts).toContain(1);
-        expect(clueTexts.length).toBe(Rikudo.puzzle.clues.length);
-        expect(Rikudo.path.length).toBe(1);
-        expect(Rikudo.board.clueByKey.get(Rikudo.path[0])).toBe(1);
+    it('drawing an edge renders a line and its erase hit-target', async () => {
+        await drawRun(0, 1);
+        expect(document.querySelectorAll('#rikudo-board .edge-line').length).toBe(1);
+        expect(document.querySelectorAll('#rikudo-board .edge-hit').length).toBe(1);
+        expect(Rikudo.edges.size).toBe(1);
     });
 
-    it('drawing the full solution shows the win banner', () => {
+    it('tapping an edge hit-target erases the edge', async () => {
+        await drawRun(0, 2);
+        const hit = document.querySelector('#rikudo-board .edge-hit');
+        hit.dispatchEvent(new window.Event('pointerdown', { bubbles: true }));
+        expect(Rikudo.edges.size).toBe(1);
+        expect(document.querySelectorAll('#rikudo-board .edge-line').length).toBe(1);
+    });
+
+    it('forced numbers render; ambiguous fragments stay blank', async () => {
         const keys = solutionKeys();
-        for (const key of keys.slice(1)) {
-            Rikudo._apply({ path: [...Rikudo.path, key], changed: true });
-        }
-        expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(false);
+        // Run from the 1-clue: forced (boundary pins the orientation)
+        await drawRun(0, 2);
+        const textOf = (key) => [...Rikudo.numberElements.entries()]
+            .find(([k]) => k === key)[1].textContent;
+        expect(textOf(keys[1])).toBe('2');
+        expect(textOf(keys[2])).toBe('3');
     });
 
-    it('reset returns the path to just cell 1 and hides the banner', () => {
-        const keys = solutionKeys();
-        for (const key of keys.slice(1)) {
-            Rikudo._apply({ path: [...Rikudo.path, key], changed: true });
-        }
-        document.getElementById('reset-btn').click();
-        expect(Rikudo.path.length).toBe(1);
-        expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(true);
-    });
-
-    it('progress persists across a reload (same day)', async () => {
-        const keys = solutionKeys();
-        for (const key of keys.slice(1, 6)) {
-            Rikudo._apply({ path: [...Rikudo.path, key], changed: true });
-        }
-        const saved = Rikudo.path.length;
-
-        vi.resetModules();
-        const mod = await import('../rikudo.js');
-        expect(mod.Rikudo.path.length).toBe(saved);
-    });
-
-    it('win lights the path up periwinkle in sequence and reset clears it', () => {
+    it('completing the board out of order shows the win banner and wave', async () => {
         vi.useFakeTimers();
         const keys = solutionKeys();
-        for (const key of keys.slice(1)) {
-            Rikudo._apply({ path: [...Rikudo.path, key], changed: true });
-        }
-
-        // Wave is staggered: after a few ticks some cells are lit, not all
-        vi.advanceTimersByTime(5 * 45);
-        const litEarly = document.querySelectorAll('#rikudo-board polygon.win-lit').length;
-        expect(litEarly).toBeGreaterThan(0);
-        expect(litEarly).toBeLessThan(keys.length);
-
-        // After the full duration every path cell is lit
-        vi.advanceTimersByTime(keys.length * 45 + 100);
-        expect(document.querySelectorAll('#rikudo-board polygon.win-lit').length).toBe(keys.length);
-
-        // Logo finale: with a loaded logo it joins the wave; in this
-        // jsdom setup the logo fetch is stubbed out, so the finale
-        // must simply not schedule anything (guard behavior)
-        expect(Rikudo.logoElement).toBeNull();
-
-        // Reset clears the wave
-        document.getElementById('reset-btn').click();
-        expect(document.querySelectorAll('#rikudo-board .win-lit').length).toBe(0);
+        const n = keys.length;
+        const mid = Math.floor(n / 2);
+        await drawRun(mid, n - 1);
+        expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(true);
+        await drawRun(0, mid);
+        expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(false);
+        vi.advanceTimersByTime(n * 45 + 500);
+        expect(document.querySelectorAll('#rikudo-board .cell.win-lit').length).toBe(n);
         vi.useRealTimers();
     });
 
+    it('reset clears edges and the win state', async () => {
+        await drawRun(0, solutionKeys().length - 1);
+        document.getElementById('reset-btn').click();
+        expect(Rikudo.edges.size).toBe(0);
+        expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(true);
+        expect(document.querySelectorAll('.win-lit').length).toBe(0);
+        expect(document.querySelectorAll('#rikudo-board .edge-line').length).toBe(0);
+    });
+
+    it('progress persists across a reload (same day)', async () => {
+        await drawRun(0, 4);
+        expect(Rikudo.edges.size).toBe(4);
+        vi.resetModules();
+        const mod = await import('../rikudo.js');
+        expect(mod.Rikudo.edges.size).toBe(4);
+    });
+
+    it('a corrupt save is discarded', async () => {
+        localStorage.setItem('rikudo-state', JSON.stringify({
+            dateKey: Rikudo.dateKey,
+            edges: ['garbage|nonsense'],
+        }));
+        vi.resetModules();
+        const mod = await import('../rikudo.js');
+        expect(mod.Rikudo.edges.size).toBe(0);
+    });
+
     it('window.solution() toggles the cheat overlay', () => {
-        expect(typeof window.solution).toBe('function');
         expect(window.solution()).toBe(true);
         const overlay = document.querySelector('#rikudo-board .solution-overlay');
         expect(overlay).not.toBeNull();
         expect(overlay.getAttribute('points').split(' ').length)
             .toBe(Rikudo.puzzle.cells.length);
         expect(window.solution()).toBe(false);
-        expect(document.querySelector('#rikudo-board .solution-overlay')).toBeNull();
+        expect(document.querySelector('.solution-overlay')).toBeNull();
     });
 });
