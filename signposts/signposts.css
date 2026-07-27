@@ -92,6 +92,23 @@ h1 {
 #signposts-board .arrow {
   fill: var(--color-text-muted);
   pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* This cell's successor is settled -- its arrow fades back */
+#signposts-board .arrow.used {
+  opacity: 0.22;
+}
+
+/* Small hexagon dot: nothing points to this cell yet */
+#signposts-board .incoming-dot {
+  fill: var(--color-text-muted);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+#signposts-board .incoming-dot.hidden {
+  display: none;
 }
 
 #signposts-board .goal-marker {
@@ -132,14 +149,14 @@ h1 {
   font-style: italic;
 }
 
-#signposts-board .link-layer .link-line {
-  stroke: var(--color-player);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* Gentle per-fragment colors for unnumbered (a, a+1, ...) chains --
+   muted pastels that sit comfortably on the dark board */
+#signposts-board .num.relative-label.frag-c0 { fill: #9fc6ff; }
+#signposts-board .num.relative-label.frag-c1 { fill: #ffc49f; }
+#signposts-board .num.relative-label.frag-c2 { fill: #a8e6b8; }
+#signposts-board .num.relative-label.frag-c3 { fill: #e6b8e0; }
+#signposts-board .num.relative-label.frag-c4 { fill: #ffe49f; }
+#signposts-board .num.relative-label.frag-c5 { fill: #9fe6e0; }
 
 #signposts-board .solution-overlay {
   stroke: var(--color-danger);

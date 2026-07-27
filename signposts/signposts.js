@@ -30,8 +30,8 @@ export const Signposts = {
     svg: null,
     cellElements: new Map(),
     numberElements: new Map(),
-    linkLines: new Map(),
-    linkLayer: null,
+    arrowElements: new Map(),
+    dotElements: new Map(),
     solutionLine: null,
     logoElement: null,
     _winTimers: [],
@@ -148,6 +148,20 @@ export const Signposts = {
                 arrow.setAttribute('class', 'arrow');
                 arrow.setAttribute('transform', `translate(${x},${y}) rotate(${directionAngle(dir)})`);
                 svg.appendChild(arrow);
+                this.arrowElements.set(key, arrow);
+            }
+
+            // Incoming indicator: a small hexagon dot shown while
+            // nothing points to this cell (never on the 1-cell --
+            // nothing ever points to it)
+            if (key !== this.board.startKey) {
+                const dot = document.createElementNS(NS, 'polygon');
+                dot.setAttribute('points',
+                    hexCorners(x, y + CELL_SIZE * 0.52, CELL_SIZE * 0.11)
+                        .map(([px, py]) => `${px},${py}`).join(' '));
+                dot.setAttribute('class', 'incoming-dot');
+                svg.appendChild(dot);
+                this.dotElements.set(key, dot);
             }
 
             const text = document.createElementNS(NS, 'text');
@@ -168,10 +182,6 @@ export const Signposts = {
         holePoly.setAttribute('class', 'hole');
         svg.appendChild(holePoly);
         this._embedLogo(svg, hole);
-
-        this.linkLayer = document.createElementNS(NS, 'g');
-        this.linkLayer.setAttribute('class', 'link-layer');
-        svg.appendChild(this.linkLayer);
 
         document.getElementById('board-container').appendChild(svg);
         this.svg = svg;
@@ -206,11 +216,18 @@ export const Signposts = {
             : new Set();
         const currentTarget = this.selected ? this.links.get(this.selected) : undefined;
 
+        const FRAG_COLORS = 6;
         for (const [key, text] of this.numberElements) {
             if (this.board.clueByKey.has(key)) continue;
             text.textContent = numberByKey.has(key) ? numberByKey.get(key)
                 : labelByKey.has(key) ? labelByKey.get(key) : '';
             text.classList.toggle('relative-label', labelByKey.has(key));
+            // Gentle per-fragment color, derived from the fragment letter
+            for (let i = 0; i < FRAG_COLORS; i++) text.classList.remove(`frag-c${i}`);
+            if (labelByKey.has(key)) {
+                const letter = labelByKey.get(key).charCodeAt(0) - 97;
+                text.classList.add(`frag-c${letter % FRAG_COLORS}`);
+            }
         }
         for (const [key, poly] of this.cellElements) {
             poly.classList.toggle('linked', this.links.has(key) || incoming.has(key));
@@ -218,39 +235,17 @@ export const Signposts = {
             poly.classList.toggle('candidate', targets.has(key));
             poly.classList.toggle('unlink-target', key === currentTarget);
         }
-
-        // Link lines: one per link (keyed by source)
-        for (const [from, line] of this.linkLines) {
-            if (this.links.get(from) === undefined) {
-                line.remove();
-                this.linkLines.delete(from);
-            }
+        // A used-up arrow dims; the dot shows while nothing points here
+        for (const [key, arrow] of this.arrowElements) {
+            arrow.classList.toggle('used', this.links.has(key));
         }
-        for (const [from, to] of this.links) {
-            const existing = this.linkLines.get(from);
-            const d = this._linkPath(from, to);
-            if (existing) {
-                if (existing.getAttribute('d') !== d) existing.setAttribute('d', d);
-            } else {
-                const line = document.createElementNS(NS, 'path');
-                line.setAttribute('class', 'link-line');
-                line.setAttribute('d', d);
-                this.linkLayer.appendChild(line);
-                this.linkLines.set(from, line);
-            }
+        for (const [key, dot] of this.dotElements) {
+            dot.classList.toggle('hidden', incoming.has(key));
         }
 
         const won = isWin(this.board, this.links);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
-    },
-
-    _linkPath(from, to) {
-        const [q1, r1] = from.split(',').map(Number);
-        const [q2, r2] = to.split(',').map(Number);
-        const a = this._center(q1, r1);
-        const b = this._center(q2, r2);
-        return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
     },
 
     _celebrate() {
