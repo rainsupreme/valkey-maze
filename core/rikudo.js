@@ -24,7 +24,7 @@ const SOLVER_NODE_BUDGET = 200000;
  */
 function hamiltonianPath(cellKeys, neighbors, prng) {
     const total = cellKeys.length;
-    let budget = PATH_NODE_BUDGET;
+    let budget = 0;
 
     function shuffled(arr) {
         const a = [...arr];
@@ -57,8 +57,10 @@ function hamiltonianPath(cellKeys, neighbors, prng) {
         return false;
     }
 
+    // Each restart gets its own budget slice so a pathological start
+    // cell cannot starve the remaining attempts.
     for (const start of shuffled(cellKeys)) {
-        if (budget <= 0) break;
+        budget = PATH_NODE_BUDGET;
         const path = [start];
         const visited = new Set([start]);
         if (extend(path, visited)) return path;
