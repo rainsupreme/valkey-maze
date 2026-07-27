@@ -119,6 +119,8 @@ export const Rikudo = {
         this.svg = svg;
     },
 
+    logoElement: null,
+
     async _embedLogo(svg, hole) {
         try {
             const resp = await fetch('../assets/valkey-logo-aligned.svg');
@@ -137,6 +139,7 @@ export const Rikudo = {
             el.setAttribute('transform',
                 `translate(${hole.x - logoCx * scale},${hole.y - logoCy * scale}) scale(${scale})`);
             svg.appendChild(el);
+            this.logoElement = el;
         } catch {
             // Logo is decorative; play on without it
         }
@@ -205,13 +208,37 @@ export const Rikudo = {
         });
         this.pathLine.setAttribute('points', points.join(' '));
 
-        const banner = document.getElementById('win-banner');
-        banner.classList.toggle('hidden', !isWin(this.board, this.path));
+        const won = isWin(this.board, this.path);
+        if (!won && this.svg) this._clearWinWave();
+        document.getElementById('win-banner').classList.toggle('hidden', !won);
     },
 
     _celebrate() {
-        this.svg.classList.add('solved');
-        setTimeout(() => this.svg.classList.remove('solved'), 1600);
+        // Light the path up in periwinkle, cell by cell, 1 -> N
+        this._clearWinWave();
+        this.path.forEach((key, i) => {
+            this._winTimers.push(setTimeout(() => {
+                this.cellElements.get(key).classList.add('win-lit');
+                this.numberElements.get(key).classList.add('win-lit');
+            }, i * 45));
+        });
+        // Finale: the logo flips white so it stays readable in a sea
+        // of periwinkle
+        if (this.logoElement) {
+            this._winTimers.push(setTimeout(() => {
+                this.logoElement.classList.add('win-lit');
+            }, this.path.length * 45));
+        }
+    },
+
+    _winTimers: [],
+
+    _clearWinWave() {
+        for (const t of this._winTimers) clearTimeout(t);
+        this._winTimers = [];
+        for (const el of this.svg.querySelectorAll('.win-lit')) {
+            el.classList.remove('win-lit');
+        }
     },
 
     // ── Solution overlay (console cheat) ────────────────────

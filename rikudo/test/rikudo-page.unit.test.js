@@ -79,6 +79,34 @@ describe('Rikudo page', () => {
         expect(mod.Rikudo.path.length).toBe(saved);
     });
 
+    it('win lights the path up periwinkle in sequence and reset clears it', () => {
+        vi.useFakeTimers();
+        const keys = solutionKeys();
+        for (const key of keys.slice(1)) {
+            Rikudo._apply({ path: [...Rikudo.path, key], changed: true });
+        }
+
+        // Wave is staggered: after a few ticks some cells are lit, not all
+        vi.advanceTimersByTime(5 * 45);
+        const litEarly = document.querySelectorAll('#rikudo-board polygon.win-lit').length;
+        expect(litEarly).toBeGreaterThan(0);
+        expect(litEarly).toBeLessThan(keys.length);
+
+        // After the full duration every path cell is lit
+        vi.advanceTimersByTime(keys.length * 45 + 100);
+        expect(document.querySelectorAll('#rikudo-board polygon.win-lit').length).toBe(keys.length);
+
+        // Logo finale: with a loaded logo it joins the wave; in this
+        // jsdom setup the logo fetch is stubbed out, so the finale
+        // must simply not schedule anything (guard behavior)
+        expect(Rikudo.logoElement).toBeNull();
+
+        // Reset clears the wave
+        document.getElementById('reset-btn').click();
+        expect(document.querySelectorAll('#rikudo-board .win-lit').length).toBe(0);
+        vi.useRealTimers();
+    });
+
     it('window.solution() toggles the cheat overlay', () => {
         expect(typeof window.solution).toBe('function');
         expect(window.solution()).toBe(true);
