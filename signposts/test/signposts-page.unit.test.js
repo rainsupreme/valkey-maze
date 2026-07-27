@@ -72,7 +72,11 @@ describe('Signposts page', () => {
         Signposts._tap(keys[1]);
         expect(Signposts.links.get(keys[0])).toBe(keys[1]);
         expect(Signposts.selected).toBe(keys[1]);
-        expect(document.querySelectorAll('#signposts-board .link-line').length).toBe(1);
+        // No lines drawn -- the source arrow dims and the target's
+        // incoming dot disappears instead
+        expect(Signposts.arrowElements.get(keys[0]).classList.contains('used')).toBe(true);
+        expect(Signposts.dotElements.get(keys[1]).classList.contains('hidden')).toBe(true);
+        expect(document.querySelectorAll('#signposts-board .link-line').length).toBe(0);
     });
 
     it('tapping the current target again disconnects', () => {
@@ -82,7 +86,16 @@ describe('Signposts page', () => {
         Signposts._tap(keys[0]);   // select 0 again
         Signposts._tap(keys[1]);   // tap its target -> unlink
         expect(Signposts.links.size).toBe(0);
-        expect(document.querySelectorAll('#signposts-board .link-line').length).toBe(0);
+        expect(Signposts.arrowElements.get(keys[0]).classList.contains('used')).toBe(false);
+        expect(Signposts.dotElements.get(keys[1]).classList.contains('hidden')).toBe(false);
+    });
+
+    it('incoming dots exist for every cell except the 1-cell', () => {
+        expect(Signposts.dotElements.size).toBe(Signposts.puzzle.cells.length - 1);
+        expect(Signposts.dotElements.has(Signposts.board.startKey)).toBe(false);
+        // Fresh board: all dots visible
+        expect(document.querySelectorAll('#signposts-board .incoming-dot:not(.hidden)').length)
+            .toBe(Signposts.puzzle.cells.length - 1);
     });
 
     it('out-of-order fragments show relative labels, then real numbers on merge', () => {
@@ -121,7 +134,23 @@ describe('Signposts page', () => {
         expect(Signposts.selected).toBeNull();
         expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(true);
         expect(document.querySelectorAll('.win-lit').length).toBe(0);
-        expect(document.querySelectorAll('#signposts-board .link-line').length).toBe(0);
+        // All dots visible again, no arrows dimmed
+        expect(document.querySelectorAll('#signposts-board .incoming-dot:not(.hidden)').length)
+            .toBe(Signposts.puzzle.cells.length - 1);
+        expect(document.querySelectorAll('#signposts-board .arrow.used').length).toBe(0);
+    });
+
+    it('unanchored fragments get a per-fragment label color class', () => {
+        const keys = solutionKeys();
+        const n = keys.length;
+        const mid = Math.floor(n / 2);
+        linkSolution(mid, mid + 2);
+        const labeled = [...document.querySelectorAll('#signposts-board .num.relative-label')];
+        if (labeled.length > 0) {
+            for (const t of labeled) {
+                expect([...t.classList].some(c => /^frag-c\d$/.test(c))).toBe(true);
+            }
+        }
     });
 
     it('progress persists across a reload (same day)', async () => {
