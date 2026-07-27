@@ -83,7 +83,7 @@ export function directionBetween(aKey, bKey) {
  */
 function sequencePath(cellKeys, successors, prng) {
     const total = cellKeys.length;
-    let budget = PATH_NODE_BUDGET;
+    let budget = 0;
 
     function shuffled(arr) {
         const a = [...arr];
@@ -114,8 +114,10 @@ function sequencePath(cellKeys, successors, prng) {
         return false;
     }
 
+    // Each restart gets its own budget slice so a pathological start
+    // cell cannot starve the remaining attempts.
     for (const start of shuffled(cellKeys)) {
-        if (budget <= 0) break;
+        budget = PATH_NODE_BUDGET;
         const path = [start];
         const visited = new Set([start]);
         if (extend(path, visited)) return path;

@@ -25,6 +25,19 @@ describe('generateRikudo (fixed seed)', () => {
     it('rejects radius < 2', () => {
         expect(() => generateRikudo({ radius: 1, prng: createPRNG(1) })).toThrow(/radius/i);
     });
+
+    it('succeeds on seeds whose first path attempt is pathological', { timeout: 30000 }, () => {
+        // Seeds where the Warnsdorff DFS exhausts the node budget on its
+        // first start cell; generation must recover via later restarts.
+        // 1131139215 was found by fast-check in CI; the rest are daily
+        // date seeds through 2029.
+        const seeds = [1131139215, 20270226, 20270607, 20271021,
+            20280211, 20280528, 20280918, 20290725];
+        for (const seed of seeds) {
+            const p = generateRikudo({ radius: 3, prng: createPRNG(seed) });
+            expect(p.solutionPath.length).toBe(36);
+        }
+    });
 });
 
 describe('Property: Rikudo solution validity', () => {
