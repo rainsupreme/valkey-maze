@@ -77,8 +77,28 @@ h1 {
   fill: #1e2a50;
 }
 
-#rikudo-board .cell.path-end {
-  fill: #2c3f78;
+#rikudo-board .edge-layer .edge-line {
+  stroke: var(--color-player);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Invisible fat twin of each edge line: the tap-to-erase hit target */
+#rikudo-board .edge-layer .edge-hit {
+  stroke: #000;
+  stroke-opacity: 0;
+  stroke-width: 14;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+/* Arrowhead on the ascending end of direction-determined fragments */
+#rikudo-board .arrow-layer .frag-arrow {
+  fill: var(--color-player);
+  opacity: 0.85;
+  pointer-events: none;
 }
 
 #rikudo-board .hole {
@@ -102,15 +122,6 @@ h1 {
 #rikudo-board .num.clue-num {
   font-weight: bold;
   fill: var(--color-danger);
-}
-
-#rikudo-board .path-line {
-  stroke: var(--color-player);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: 0.45;
-  pointer-events: none;
 }
 
 #rikudo-board .solution-overlay {

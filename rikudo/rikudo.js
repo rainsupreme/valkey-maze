@@ -1,53 +1,47 @@
 // ── Rikudo page controller ──────────────────────────────────
 //
-// Daily-seeded Rikudo with path-drawing interaction: drag (or tap)
-// from 1 to extend the number path; drag backwards or tap a path
-// cell to undo. Type solution() in the console for the cheat overlay.
+// Daily-seeded Rikudo with edge-drawing interaction: drag across
+// adjacent cells to connect them -- anywhere on the board, in any
+// order. Fragments show numbers once the clues force them. Tap a
+// drawn segment to erase it. Type solution() in the console for the
+// cheat overlay.
 
 import { createPRNG, dateSeed } from '../core/prng.js';
 import { generateRikudo } from '../core/rikudo.js';
 import { axialToPixel, hexCorners } from '../core/hex-cell-grid.js';
-import { createBoard, initialPath, applyCell, applyDrag, isWin } from './rikudo.logic.js';
+import {
+    createBoard, initialEdges, edgeId, numbering, orientedFragments,
+    addEdge, removeEdge, isWin, winOrder,
+} from './rikudo.logic.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const CELL_SIZE = 34;
 const RADIUS = 3;
 const STORAGE_KEY = 'rikudo-state';
 
-function readTheme() {
-    const style = getComputedStyle(document.documentElement);
-    const get = (prop, fallback) => style.getPropertyValue(prop).trim() || fallback;
-    return {
-        accent: get('--color-maze', '#6983ff'),
-        danger: get('--color-danger', '#ff9b29'),
-        bg: get('--color-bg', '#000000'),
-        cell: get('--rikudo-cell', '#14141c'),
-        clueCell: get('--rikudo-clue-cell', '#2a2a3a'),
-        text: get('--color-player', '#ffffff'),
-    };
-}
-
 export const Rikudo = {
     puzzle: null,
     board: null,
-    path: [],
+    edges: null,
     dateKey: '',
 
     svg: null,
     cellElements: new Map(),   // key -> polygon
     numberElements: new Map(), // key -> text
-    pathLine: null,
+    edgeElements: new Map(),   // edgeId -> line group
+    edgeLayer: null,
     solutionLine: null,
-    theme: null,
+    logoElement: null,
     _dragging: false,
+    _dragKey: null,
+    _winTimers: [],
 
     init() {
-        this.theme = readTheme();
         const today = new Date();
         this.dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
         this.puzzle = generateRikudo({ radius: RADIUS, prng: createPRNG(dateSeed(today)) });
         this.board = createBoard(this.puzzle);
-        this.path = this._restore() || initialPath(this.board);
+        this.edges = this._restore() || initialEdges();
 
         this._buildBoard();
         this._bindPointer();
@@ -63,6 +57,11 @@ export const Rikudo = {
     _center(q, r) {
         const p = axialToPixel(q, r, CELL_SIZE);
         return { x: this._ox + p.x, y: this._oy + p.y };
+    },
+
+    _centerOf(key) {
+        const [q, r] = key.split(',').map(Number);
+        return this._center(q, r);
     },
 
     _buildBoard() {
@@ -109,17 +108,22 @@ export const Rikudo = {
         svg.appendChild(holePoly);
         this._embedLogo(svg, hole);
 
-        // Player path polyline (above cells, below numbers is fine)
-        this.pathLine = document.createElementNS(NS, 'polyline');
-        this.pathLine.setAttribute('class', 'path-line');
-        this.pathLine.setAttribute('fill', 'none');
-        svg.appendChild(this.pathLine);
+        // Edge layer sits above cells, below numbers
+        this.edgeLayer = document.createElementNS(NS, 'g');
+        this.edgeLayer.setAttribute('class', 'edge-layer');
+        svg.appendChild(this.edgeLayer);
+
+        // Arrowheads marking the ascending end of determined fragments
+        this.arrowLayer = document.createElementNS(NS, 'g');
+        this.arrowLayer.setAttribute('class', 'arrow-layer');
+        svg.appendChild(this.arrowLayer);
 
         document.getElementById('board-container').appendChild(svg);
         this.svg = svg;
-    },
 
-    logoElement: null,
+        // Numbers must render above the edge lines
+        for (const text of this.numberElements.values()) svg.appendChild(text);
+    },
 
     async _embedLogo(svg, hole) {
         try {
@@ -154,26 +158,39 @@ export const Rikudo = {
 
     _bindPointer() {
         this.svg.addEventListener('pointerdown', (e) => {
+            const edge = e.target.dataset && e.target.dataset.edge;
+            if (edge) {
+                // Tap a drawn segment -> erase it
+                this._apply(removeEdge(this.edges, edge));
+                e.preventDefault();
+                return;
+            }
             const key = e.target.dataset && e.target.dataset.key;
             if (!key) return;
             this._dragging = true;
-            this._apply(applyCell(this.board, this.path, key));
+            this._dragKey = key;
             e.preventDefault();
         });
         this.svg.addEventListener('pointermove', (e) => {
             if (!this._dragging) return;
             const key = this._cellKeyAt(e.clientX, e.clientY);
-            if (key) this._apply(applyDrag(this.board, this.path, key));
+            if (key && key !== this._dragKey) {
+                const result = addEdge(this.board, this.edges, this._dragKey, key);
+                if (result.changed) this._apply(result);
+                // Follow the pointer even when the edge was refused,
+                // so drawing can continue from wherever the finger is
+                this._dragKey = key;
+            }
             e.preventDefault();
         });
-        const stop = () => { this._dragging = false; };
+        const stop = () => { this._dragging = false; this._dragKey = null; };
         window.addEventListener('pointerup', stop);
         window.addEventListener('pointercancel', stop);
     },
 
     _bindControls() {
         document.getElementById('reset-btn').addEventListener('click', () => {
-            this.path = initialPath(this.board);
+            this.edges = initialEdges();
             this._save();
             this.render();
         });
@@ -181,42 +198,101 @@ export const Rikudo = {
 
     _apply(result) {
         if (!result.changed) return;
-        this.path = result.path;
+        this.edges = result.edges;
         this._save();
         this.render();
-        if (isWin(this.board, this.path)) this._celebrate();
+        if (isWin(this.board, this.edges)) this._celebrate();
     },
 
     // ── Rendering ───────────────────────────────────────────
 
     render() {
-        const numberByKey = new Map(this.path.map((key, i) => [key, i + 1]));
+        const numberByKey = numbering(this.board, this.edges);
+        const touched = new Set();
+        for (const id of this.edges) {
+            const [a, b] = id.split('|');
+            touched.add(a);
+            touched.add(b);
+        }
 
         for (const [key, text] of this.numberElements) {
             if (this.board.clueByKey.has(key)) continue; // clues always shown
             text.textContent = numberByKey.has(key) ? numberByKey.get(key) : '';
         }
         for (const [key, poly] of this.cellElements) {
-            poly.classList.toggle('on-path', numberByKey.has(key));
-            poly.classList.toggle('path-end', key === this.path[this.path.length - 1]);
+            poly.classList.toggle('on-path', touched.has(key));
         }
 
-        const points = this.path.map(key => {
-            const [q, r] = key.split(',').map(Number);
-            const { x, y } = this._center(q, r);
-            return `${x},${y}`;
-        });
-        this.pathLine.setAttribute('points', points.join(' '));
+        // Edge lines: one group (visible line + fat hit line) per edge
+        for (const [id, el] of this.edgeElements) {
+            if (!this.edges.has(id)) {
+                el.remove();
+                this.edgeElements.delete(id);
+            }
+        }
+        for (const id of this.edges) {
+            if (this.edgeElements.has(id)) continue;
+            const [a, b] = id.split('|');
+            const pa = this._centerOf(a);
+            const pb = this._centerOf(b);
+            const group = document.createElementNS(NS, 'g');
+            const mk = (cls) => {
+                const line = document.createElementNS(NS, 'line');
+                line.setAttribute('x1', pa.x); line.setAttribute('y1', pa.y);
+                line.setAttribute('x2', pb.x); line.setAttribute('y2', pb.y);
+                line.setAttribute('class', cls);
+                line.dataset.edge = id;
+                group.appendChild(line);
+            };
+            mk('edge-line');
+            mk('edge-hit');
+            this.edgeLayer.appendChild(group);
+            this.edgeElements.set(id, group);
+        }
 
-        const won = isWin(this.board, this.path);
+        const won = isWin(this.board, this.edges);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
+
+        this._renderArrowheads(won);
+    },
+
+    /**
+     * An arrowhead marks the ascending end of every fragment whose
+     * direction the clues have pinned down; ambiguous fragments get
+     * none (their direction is genuinely unknown). Hidden on a win --
+     * the wave takes over.
+     */
+    _renderArrowheads(won) {
+        while (this.arrowLayer.firstChild) this.arrowLayer.firstChild.remove();
+        if (won) return;
+        for (const { chain, determined } of orientedFragments(this.board, this.edges)) {
+            if (!determined || chain.length < 2) continue;
+            const tip = this._centerOf(chain[chain.length - 1]);
+            const prev = this._centerOf(chain[chain.length - 2]);
+            const dx = tip.x - prev.x;
+            const dy = tip.y - prev.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+            // Sits past the number badge, inside the end cell
+            const px = tip.x + ux * CELL_SIZE * 0.62;
+            const py = tip.y + uy * CELL_SIZE * 0.62;
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            const s = CELL_SIZE * 0.24;
+            const head = document.createElementNS(NS, 'path');
+            head.setAttribute('d', `M ${-s * 0.7} ${-s} L ${s} 0 L ${-s * 0.7} ${s} Z`);
+            head.setAttribute('class', 'frag-arrow');
+            head.setAttribute('transform', `translate(${px},${py}) rotate(${angle})`);
+            this.arrowLayer.appendChild(head);
+        }
     },
 
     _celebrate() {
         // Light the path up in periwinkle, cell by cell, 1 -> N
         this._clearWinWave();
-        this.path.forEach((key, i) => {
+        const order = winOrder(this.board, this.edges);
+        order.forEach((key, i) => {
             this._winTimers.push(setTimeout(() => {
                 this.cellElements.get(key).classList.add('win-lit');
                 this.numberElements.get(key).classList.add('win-lit');
@@ -227,11 +303,9 @@ export const Rikudo = {
         if (this.logoElement) {
             this._winTimers.push(setTimeout(() => {
                 this.logoElement.classList.add('win-lit');
-            }, this.path.length * 45));
+            }, order.length * 45));
         }
     },
-
-    _winTimers: [],
 
     _clearWinWave() {
         for (const t of this._winTimers) clearTimeout(t);
@@ -265,7 +339,10 @@ export const Rikudo = {
 
     _save() {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ dateKey: this.dateKey, path: this.path }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                dateKey: this.dateKey,
+                edges: [...this.edges],
+            }));
         } catch { /* storage unavailable: play without saving */ }
     },
 
@@ -275,16 +352,18 @@ export const Rikudo = {
             if (!raw) return null;
             const saved = JSON.parse(raw);
             if (saved.dateKey !== this.dateKey) return null;
-            if (!Array.isArray(saved.path) || saved.path[0] !== this.board.startKey) return null;
-            // Replay through the logic layer so a stale/corrupt path can't
-            // put the board in an invalid state
-            let path = initialPath(this.board);
-            for (const key of saved.path.slice(1)) {
-                const result = applyDrag(this.board, path, key);
+            if (!Array.isArray(saved.edges)) return null;
+            // Replay through the validator so a stale/corrupt save can
+            // never produce an illegal board
+            let edges = initialEdges();
+            for (const id of saved.edges) {
+                if (typeof id !== 'string') return null;
+                const [a, b] = id.split('|');
+                const result = addEdge(this.board, edges, a, b);
                 if (!result.changed) return null;
-                path = result.path;
+                edges = result.edges;
             }
-            return path;
+            return edges;
         } catch {
             return null;
         }
