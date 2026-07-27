@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Valkey Signposts</title>
+  <link rel="icon" href="../game/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../site/nav.css">
+  <link rel="stylesheet" href="../site/about.css">
+  <link rel="stylesheet" href="signposts.css">
+</head>
+<body>
+  <main>
+    <h1>Signposts</h1>
+    <p class="tagline">Number the cells 1 to 36. Each next number lies somewhere along the arrow — tap a glowing cell to place it.</p>
+
+    <div id="board-container"></div>
+
+    <div id="win-banner" class="hidden">🎉 Solved! Come back tomorrow for a new puzzle.</div>
+
+    <div class="controls-row">
+      <button id="reset-btn">Reset</button>
+      <span class="daily-note">Daily puzzle — same for everyone, new at midnight</span>
+    </div>
+  </main>
+
+  <script type="module" src="../site/nav.js"></script>
+  <script type="module" src="../site/about.js"></script>
+  <script type="module" src="signposts.js"></script>
+</body>
+</html>

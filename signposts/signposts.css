@@ -1,0 +1,205 @@
+/* ── Signposts page ────────────────────────────────────────────── */
+
+:root {
+  --color-player: #ffffff;
+  --color-danger: #ff9b29;
+  --color-maze: #6983ff;
+  --color-bg: #000000;
+  --color-text: #ccc;
+  --color-text-muted: #888;
+  --color-panel-bg: rgba(20, 20, 20, 0.9);
+  --signposts-cell: #14141c;
+  --signposts-clue-cell: #2a2a3a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Open Sans', Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+main {
+  width: 100%;
+  max-width: 640px;
+  padding: 3.5rem 0.75rem 1.5rem; /* top padding clears the nav strip */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+h1 {
+  margin: 0.25rem 0 0;
+  font-size: 1.4rem;
+  color: #fff;
+}
+
+.tagline {
+  margin: 0.35rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* ── Board ── */
+
+#board-container {
+  width: 100%;
+}
+
+#signposts-board {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: none; /* the board owns its pointer gestures */
+}
+
+#signposts-board .cell {
+  fill: var(--signposts-cell);
+  stroke: var(--color-maze);
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+#signposts-board .cell.clue {
+  fill: var(--signposts-clue-cell);
+}
+
+#signposts-board .cell.on-path {
+  fill: #1e2a50;
+}
+
+#signposts-board .cell.path-end {
+  fill: #2c3f78;
+}
+
+#signposts-board .hole {
+  fill: var(--signposts-cell);
+  stroke: var(--color-maze);
+  stroke-width: 1.5;
+}
+
+#signposts-board .arrow {
+  fill: var(--color-text-muted);
+  pointer-events: none;
+}
+
+#signposts-board .goal-marker {
+  fill: var(--color-danger);
+  pointer-events: none;
+}
+
+#signposts-board .cell.candidate {
+  fill: #223058;
+  stroke: var(--color-player);
+  stroke-width: 2;
+}
+
+#signposts-board .logo {
+  fill: var(--color-maze);
+  pointer-events: none;
+}
+
+#signposts-board .num {
+  fill: var(--color-player);
+  font-family: Arial, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+#signposts-board .num.clue-num {
+  font-weight: bold;
+  fill: var(--color-danger);
+}
+
+#signposts-board .path-line {
+  stroke: var(--color-player);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+#signposts-board .solution-overlay {
+  stroke: var(--color-danger);
+  stroke-width: 5;
+  stroke-dasharray: 10 8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+/* Win wave: path cells light up periwinkle in sequence (delay set in JS) */
+#signposts-board .cell.win-lit {
+  fill: var(--color-maze);
+  transition: fill 0.3s ease;
+}
+
+#signposts-board .num.win-lit {
+  fill: #000;
+  transition: fill 0.3s ease;
+}
+
+#signposts-board .logo.win-lit {
+  fill: var(--color-player);
+  transition: fill 0.4s ease;
+}
+
+/* ── Controls ── */
+
+.controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+#reset-btn {
+  padding: 0.3rem 0.6rem;
+  background: var(--color-danger);
+  color: #000;
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+#reset-btn:hover {
+  background: #b86e1f;
+}
+
+.daily-note {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+#win-banner {
+  margin-top: 0.6rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-panel-bg);
+  color: var(--color-maze);
+  border: 1px solid var(--color-maze);
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+#win-banner.hidden {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  h1 { font-size: 1.15rem; }
+  .tagline { font-size: 0.75rem; }
+}
