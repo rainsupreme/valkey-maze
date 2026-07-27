@@ -8,7 +8,10 @@
 import { createPRNG, dateSeed } from '../core/prng.js';
 import { generateMinesweeper } from '../core/minesweeper.js';
 import { axialToPixel, hexCorners, hexDistance } from '../core/hex-cell-grid.js';
-import { createBoard, initialMarks, cycleMark, flaggedCount, isWin, validateMarks, MARK } from './minesweeper.logic.js';
+import {
+    createBoard, initialMarks, cycleMark, flaggedCount, isWin,
+    isComplete, violatedClues, validateMarks, MARK,
+} from './minesweeper.logic.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const CELL_SIZE = 34;
@@ -170,6 +173,37 @@ export const Minesweeper = {
         const won = isWin(this.board, this.marks);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
+
+        this._renderCheck(won);
+    },
+
+    /**
+     * Completion feedback: only once every cell is marked. Clues
+     * whose counts disagree with the flags light up -- pointing where
+     * to look without giving the answer away. (A complete board with
+     * no violations and the right flag total is the unique solution,
+     * so it wins instead of reaching here.)
+     */
+    _renderCheck(won) {
+        const note = document.getElementById('check-note');
+        const complete = !won && isComplete(this.board, this.marks);
+        const violated = new Set(complete ? violatedClues(this.board, this.marks) : []);
+
+        for (const [key, poly] of this.cellElements) {
+            if (!this.board.clueByKey.has(key)) continue;
+            poly.classList.toggle('violated', violated.has(key));
+        }
+
+        if (!complete) {
+            note.classList.add('hidden');
+            return;
+        }
+        note.classList.remove('hidden');
+        if (violated.size > 0) {
+            note.textContent = `Not quite — the ${violated.size} highlighted clue${violated.size === 1 ? '' : 's'} disagree${violated.size === 1 ? 's' : ''} with your flags.`;
+        } else {
+            note.textContent = `The clues all check out — but you've flagged ${flaggedCount(this.marks)} of ${this.board.mineCount} mines.`;
+        }
     },
 
     _celebrate() {

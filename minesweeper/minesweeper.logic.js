@@ -7,16 +7,30 @@
 
 export const MARK = Object.freeze({ MINE: 'mine', SAFE: 'safe' });
 
+import { HEX_DIRECTIONS } from '../core/hex-cell-grid.js';
+
 /**
  * Build the immutable lookup state for a puzzle.
  * @param {object} puzzle - from generateMinesweeper()
  */
 export function createBoard(puzzle) {
+    const cellSet = new Set(puzzle.cells.map(({ q, r }) => `${q},${r}`));
+    const neighbors = new Map();
+    for (const { q, r } of puzzle.cells) {
+        const adj = [];
+        for (const [dq, dr] of HEX_DIRECTIONS) {
+            const nk = `${q + dq},${r + dr}`;
+            if (cellSet.has(nk)) adj.push(nk);
+        }
+        neighbors.set(`${q},${r}`, adj);
+    }
+
     return {
         mineCount: puzzle.mineCount,
         clueByKey: new Map(puzzle.clues.map(c => [`${c.q},${c.r}`, c.value])),
         mineSet: new Set(puzzle.solutionMines.map(([q, r]) => `${q},${r}`)),
         cellKeys: puzzle.cells.map(({ q, r }) => `${q},${r}`),
+        neighbors,
     };
 }
 
@@ -64,6 +78,28 @@ export function isWin(board, marks) {
         flagged += 1;
     }
     return flagged === board.mineSet.size;
+}
+
+/** Every non-clue cell carries a mark (mine or safe). */
+export function isComplete(board, marks) {
+    return board.cellKeys.every(key => board.clueByKey.has(key) || marks.has(key));
+}
+
+/**
+ * Clue cells whose value disagrees with the current flags. Meaningful
+ * feedback once the board is complete: by the no-guessing uniqueness
+ * guarantee, a complete board with no violations and the right flag
+ * total is the solution.
+ * @returns {string[]} keys of violated clue cells
+ */
+export function violatedClues(board, marks) {
+    const out = [];
+    for (const [key, value] of board.clueByKey) {
+        const flagged = (board.neighbors.get(key) || [])
+            .filter(nk => marks.get(nk) === MARK.MINE).length;
+        if (flagged !== value) out.push(key);
+    }
+    return out;
 }
 
 /**

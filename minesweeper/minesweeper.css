@@ -189,6 +189,27 @@ h1 {
   display: none;
 }
 
+/* Completion feedback: shown only when every cell is marked */
+#check-note {
+  margin-top: 0.6rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-panel-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+#check-note.hidden {
+  display: none;
+}
+
+/* Clue cells whose count disagrees with the flags (full board only) */
+#minesweeper-board .cell.violated {
+  stroke: var(--color-danger);
+  stroke-width: 2.5;
+}
+
 @media (max-width: 400px) {
   h1 { font-size: 1.15rem; }
   .tagline { font-size: 0.75rem; }

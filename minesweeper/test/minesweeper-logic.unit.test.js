@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { createPRNG } from '../../core/prng.js';
 import { generateMinesweeper } from '../../core/minesweeper.js';
-import { createBoard, initialMarks, cycleMark, flaggedCount, isWin, validateMarks, MARK } from '../minesweeper.logic.js';
+import {
+    createBoard, initialMarks, cycleMark, flaggedCount, isWin,
+    isComplete, violatedClues, validateMarks, MARK,
+} from '../minesweeper.logic.js';
 
 const puzzle = generateMinesweeper({ radius: 2, mineCount: 5, prng: createPRNG(11) });
 const board = createBoard(puzzle);
@@ -74,5 +77,45 @@ describe('validateMarks', () => {
         expect(validateMarks(board, { [mineKeys[0]]: 'bomb' })).toBeNull();
         expect(validateMarks(board, null)).toBeNull();
         expect(validateMarks(board, [1, 2])).toBeNull();
+    });
+});
+
+describe('isComplete / violatedClues', () => {
+    function fullMarks(swapMine = null, swapSafe = null) {
+        const marks = new Map();
+        for (const k of board.cellKeys) {
+            if (board.clueByKey.has(k)) continue;
+            let flag = board.mineSet.has(k);
+            if (k === swapMine) flag = false;
+            if (k === swapSafe) flag = true;
+            marks.set(k, flag ? MARK.MINE : MARK.SAFE);
+        }
+        return marks;
+    }
+
+    it('isComplete requires every non-clue cell marked', () => {
+        expect(isComplete(board, initialMarks())).toBe(false);
+        const marks = fullMarks();
+        expect(isComplete(board, marks)).toBe(true);
+        const partial = new Map(marks);
+        partial.delete(unknownSafe[0]);
+        expect(isComplete(board, partial)).toBe(false);
+    });
+
+    it('the correct full board violates no clues', () => {
+        expect(violatedClues(board, fullMarks())).toEqual([]);
+    });
+
+    it('a mine/safe swap violates at least one clue', () => {
+        const marks = fullMarks(mineKeys[0], unknownSafe[0]);
+        expect(isWin(board, marks)).toBe(false);
+        const violated = violatedClues(board, marks);
+        expect(violated.length).toBeGreaterThan(0);
+        // Every reported clue genuinely disagrees
+        for (const key of violated) {
+            const flagged = board.neighbors.get(key)
+                .filter(nk => marks.get(nk) === MARK.MINE).length;
+            expect(flagged).not.toBe(board.clueByKey.get(key));
+        }
     });
 });
