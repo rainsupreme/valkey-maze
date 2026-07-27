@@ -73,12 +73,14 @@ h1 {
   fill: var(--signposts-clue-cell);
 }
 
-#signposts-board .cell.on-path {
+#signposts-board .cell.linked {
   fill: #1e2a50;
 }
 
-#signposts-board .cell.path-end {
+#signposts-board .cell.selected {
   fill: #2c3f78;
+  stroke: var(--color-player);
+  stroke-width: 2.5;
 }
 
 #signposts-board .hole {
@@ -103,6 +105,11 @@ h1 {
   stroke-width: 2;
 }
 
+#signposts-board .cell.unlink-target {
+  stroke: var(--color-danger);
+  stroke-width: 2;
+}
+
 #signposts-board .logo {
   fill: var(--color-maze);
   pointer-events: none;
@@ -120,7 +127,12 @@ h1 {
   fill: var(--color-danger);
 }
 
-#signposts-board .path-line {
+#signposts-board .num.relative-label {
+  fill: var(--color-text-muted);
+  font-style: italic;
+}
+
+#signposts-board .link-layer .link-line {
   stroke: var(--color-player);
   stroke-width: 4;
   stroke-linecap: round;

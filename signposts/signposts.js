@@ -1,15 +1,19 @@
 // ── Signposts page controller ───────────────────────────────
 //
-// Daily-seeded hex Signposts. Tap cells to build the sequence: from
-// the current number, any highlighted cell along its arrow is a valid
-// next step. Tap a placed cell to rewind. Type solution() in the
-// console for the cheat overlay.
+// Daily-seeded hex Signposts, link-based play: tap a cell to select
+// it (legal targets along its arrow glow), tap a target to connect.
+// Chains not yet joined to a numbered clue show relative labels
+// (a, a+1, ...). Tap a cell's current target again to disconnect.
+// Type solution() in the console for the cheat overlay.
 
 import { createPRNG, dateSeed } from '../core/prng.js';
 import { generateSignposts } from '../core/signposts.js';
 import { axialToPixel, hexCorners } from '../core/hex-cell-grid.js';
 import { directionAngle } from '../core/render/signposts-svg.js';
-import { createBoard, initialPath, candidates, applyCell, isWin } from './signposts.logic.js';
+import {
+    createBoard, initialLinks, numbering, candidates,
+    applyLink, removeLink, isWin, winOrder,
+} from './signposts.logic.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const CELL_SIZE = 34;
@@ -19,13 +23,15 @@ const STORAGE_KEY = 'signposts-state';
 export const Signposts = {
     puzzle: null,
     board: null,
-    path: [],
+    links: null,
+    selected: null,
     dateKey: '',
 
     svg: null,
     cellElements: new Map(),
     numberElements: new Map(),
-    pathLine: null,
+    linkLines: new Map(),
+    linkLayer: null,
     solutionLine: null,
     logoElement: null,
     _winTimers: [],
@@ -35,24 +41,61 @@ export const Signposts = {
         this.dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
         this.puzzle = generateSignposts({ radius: RADIUS, prng: createPRNG(dateSeed(today)) });
         this.board = createBoard(this.puzzle);
-        this.path = this._restore() || initialPath(this.board);
+        this.links = this._restore() || initialLinks();
 
         this._buildBoard();
         this.svg.addEventListener('pointerdown', (e) => {
             const key = e.target.dataset && e.target.dataset.key;
-            if (key) {
-                this._apply(applyCell(this.board, this.path, key));
-                e.preventDefault();
-            }
+            this._tap(key || null);
+            if (key) e.preventDefault();
         });
         document.getElementById('reset-btn').addEventListener('click', () => {
-            this.path = initialPath(this.board);
+            this.links = initialLinks();
+            this.selected = null;
             this._save();
             this.render();
         });
         this.render();
 
         window.solution = () => this.toggleSolution();
+    },
+
+    // ── Interaction ─────────────────────────────────────────
+
+    _tap(key) {
+        if (!key) { this._select(null); return; }
+
+        if (this.selected && this.selected !== key) {
+            // Tap on the selected cell's current target -> disconnect
+            if (this.links.get(this.selected) === key) {
+                const result = removeLink(this.links, this.selected);
+                this._apply(result);
+                this._select(key); // keep flow going from the tapped cell
+                return;
+            }
+            // Tap on a legal target -> connect, selection follows
+            const result = applyLink(this.board, this.links, this.selected, key);
+            if (result.changed) {
+                this._apply(result);
+                this._select(key);
+                return;
+            }
+        }
+        // Otherwise (re)select the tapped cell
+        this._select(this.selected === key ? null : key);
+    },
+
+    _select(key) {
+        this.selected = key;
+        this.render();
+    },
+
+    _apply(result) {
+        if (!result.changed) return;
+        this.links = result.links;
+        this._save();
+        this.render();
+        if (isWin(this.board, this.links)) this._celebrate();
     },
 
     // ── Board construction ──────────────────────────────────
@@ -87,13 +130,13 @@ export const Signposts = {
             svg.appendChild(poly);
             this.cellElements.set(key, poly);
 
-            // Arrow (or goal marker), lower half of the cell
+            // Arrow (or goal marker), centered in the cell; the
+            // number/label renders in a small badge above it
             const dir = this.board.arrowByKey.get(key);
-            const glyphY = y + CELL_SIZE * 0.33;
             if (dir === null || dir === undefined) {
                 const goal = document.createElementNS(NS, 'polygon');
                 goal.setAttribute('points',
-                    hexCorners(x, glyphY, CELL_SIZE * 0.2).map(([px, py]) => `${px},${py}`).join(' '));
+                    hexCorners(x, y, CELL_SIZE * 0.24).map(([px, py]) => `${px},${py}`).join(' '));
                 goal.setAttribute('class', 'goal-marker');
                 svg.appendChild(goal);
             } else {
@@ -103,13 +146,13 @@ export const Signposts = {
                     `M ${-a} ${-a * 0.45} L ${a * 0.15} ${-a * 0.45} L ${a * 0.15} ${-a * 0.85}` +
                     ` L ${a} 0 L ${a * 0.15} ${a * 0.85} L ${a * 0.15} ${a * 0.45} L ${-a} ${a * 0.45} Z`);
                 arrow.setAttribute('class', 'arrow');
-                arrow.setAttribute('transform', `translate(${x},${glyphY}) rotate(${directionAngle(dir)})`);
+                arrow.setAttribute('transform', `translate(${x},${y}) rotate(${directionAngle(dir)})`);
                 svg.appendChild(arrow);
             }
 
             const text = document.createElementNS(NS, 'text');
             text.setAttribute('x', x);
-            text.setAttribute('y', y - CELL_SIZE * 0.22 + fontSize * 0.36);
+            text.setAttribute('y', y - CELL_SIZE * 0.42 + fontSize * 0.36);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('font-size', fontSize);
             text.setAttribute('class', `num${isClue ? ' clue-num' : ''}`);
@@ -126,10 +169,9 @@ export const Signposts = {
         svg.appendChild(holePoly);
         this._embedLogo(svg, hole);
 
-        this.pathLine = document.createElementNS(NS, 'polyline');
-        this.pathLine.setAttribute('class', 'path-line');
-        this.pathLine.setAttribute('fill', 'none');
-        svg.appendChild(this.pathLine);
+        this.linkLayer = document.createElementNS(NS, 'g');
+        this.linkLayer.setAttribute('class', 'link-layer');
+        svg.appendChild(this.linkLayer);
 
         document.getElementById('board-container').appendChild(svg);
         this.svg = svg;
@@ -154,45 +196,67 @@ export const Signposts = {
         } catch { /* decorative */ }
     },
 
-    // ── State + rendering ───────────────────────────────────
-
-    _apply(result) {
-        if (!result.changed) return;
-        this.path = result.path;
-        this._save();
-        this.render();
-        if (isWin(this.board, this.path)) this._celebrate();
-    },
+    // ── Rendering ───────────────────────────────────────────
 
     render() {
-        const numberByKey = new Map(this.path.map((key, i) => [key, i + 1]));
-        const nextCells = new Set(candidates(this.board, this.path));
-        const end = this.path[this.path.length - 1];
+        const { numberByKey, labelByKey } = numbering(this.board, this.links);
+        const incoming = new Set(this.links.values());
+        const targets = this.selected
+            ? new Set(candidates(this.board, this.links, this.selected))
+            : new Set();
+        const currentTarget = this.selected ? this.links.get(this.selected) : undefined;
 
         for (const [key, text] of this.numberElements) {
             if (this.board.clueByKey.has(key)) continue;
-            text.textContent = numberByKey.has(key) ? numberByKey.get(key) : '';
+            text.textContent = numberByKey.has(key) ? numberByKey.get(key)
+                : labelByKey.has(key) ? labelByKey.get(key) : '';
+            text.classList.toggle('relative-label', labelByKey.has(key));
         }
         for (const [key, poly] of this.cellElements) {
-            poly.classList.toggle('on-path', numberByKey.has(key));
-            poly.classList.toggle('path-end', key === end);
-            poly.classList.toggle('candidate', nextCells.has(key));
+            poly.classList.toggle('linked', this.links.has(key) || incoming.has(key));
+            poly.classList.toggle('selected', key === this.selected);
+            poly.classList.toggle('candidate', targets.has(key));
+            poly.classList.toggle('unlink-target', key === currentTarget);
         }
 
-        this.pathLine.setAttribute('points', this.path.map(key => {
-            const [q, r] = key.split(',').map(Number);
-            const { x, y } = this._center(q, r);
-            return `${x},${y}`;
-        }).join(' '));
+        // Link lines: one per link (keyed by source)
+        for (const [from, line] of this.linkLines) {
+            if (this.links.get(from) === undefined) {
+                line.remove();
+                this.linkLines.delete(from);
+            }
+        }
+        for (const [from, to] of this.links) {
+            const existing = this.linkLines.get(from);
+            const d = this._linkPath(from, to);
+            if (existing) {
+                if (existing.getAttribute('d') !== d) existing.setAttribute('d', d);
+            } else {
+                const line = document.createElementNS(NS, 'path');
+                line.setAttribute('class', 'link-line');
+                line.setAttribute('d', d);
+                this.linkLayer.appendChild(line);
+                this.linkLines.set(from, line);
+            }
+        }
 
-        const won = isWin(this.board, this.path);
+        const won = isWin(this.board, this.links);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
     },
 
+    _linkPath(from, to) {
+        const [q1, r1] = from.split(',').map(Number);
+        const [q2, r2] = to.split(',').map(Number);
+        const a = this._center(q1, r1);
+        const b = this._center(q2, r2);
+        return `M ${a.x} ${a.y} L ${b.x} ${b.y}`;
+    },
+
     _celebrate() {
         this._clearWinWave();
-        this.path.forEach((key, i) => {
+        const order = winOrder(this.board, this.links);
+        order.forEach((key, i) => {
             this._winTimers.push(setTimeout(() => {
                 this.cellElements.get(key).classList.add('win-lit');
                 this.numberElements.get(key).classList.add('win-lit');
@@ -201,7 +265,7 @@ export const Signposts = {
         if (this.logoElement) {
             this._winTimers.push(setTimeout(() => {
                 this.logoElement.classList.add('win-lit');
-            }, this.path.length * 45));
+            }, order.length * 45));
         }
     },
 
@@ -237,7 +301,10 @@ export const Signposts = {
 
     _save() {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ dateKey: this.dateKey, path: this.path }));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                dateKey: this.dateKey,
+                links: [...this.links],
+            }));
         } catch { /* play without saving */ }
     },
 
@@ -247,14 +314,17 @@ export const Signposts = {
             if (!raw) return null;
             const saved = JSON.parse(raw);
             if (saved.dateKey !== this.dateKey) return null;
-            if (!Array.isArray(saved.path) || saved.path[0] !== this.board.startKey) return null;
-            let path = initialPath(this.board);
-            for (const key of saved.path.slice(1)) {
-                const result = applyCell(this.board, path, key);
+            if (!Array.isArray(saved.links)) return null;
+            // Replay through the validator so a stale/corrupt save
+            // can never produce an illegal board
+            let links = initialLinks();
+            for (const pair of saved.links) {
+                if (!Array.isArray(pair) || pair.length !== 2) return null;
+                const result = applyLink(this.board, links, pair[0], pair[1]);
                 if (!result.changed) return null;
-                path = result.path;
+                links = result.links;
             }
-            return path;
+            return links;
         } catch {
             return null;
         }
