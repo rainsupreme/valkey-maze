@@ -4,6 +4,8 @@
 // browser and Node. All inputs are data (the optional logo is passed
 // as SVG source text, not a file path).
 
+import { embedLogoPath } from './logo.js';
+
 const ROW_HEIGHT = Math.sqrt(3) / 2; // height of a triangle row, in cell units
 
 const DEFAULTS = {
@@ -123,7 +125,13 @@ export function renderMazeSVG(maze, options = {}) {
 
     // ── Logo (outside the rotation group, at absolute center) ──
     if (opts.logoSvg && maze.centerHexRadius > 0) {
-        parts.push(logoPath(opts.logoSvg, opts.logoColor, width, height, maze.centerHexRadius, cs, stretch));
+        parts.push(embedLogoPath(opts.logoSvg, {
+            fill: opts.logoColor,
+            cx: width / 2,
+            cy: height / 2,
+            height: maze.centerHexRadius * cs * 2,
+            stretchY: stretch,
+        }));
     }
 
     parts.push('</svg>');
@@ -203,34 +211,3 @@ function entryArrow(maze, cellSet, cs, h, margin, opts) {
     return '';
 }
 
-/**
- * Extract the first <path> and viewBox from logo SVG source text and
- * emit it scaled to fill the maze's open center.
- */
-function logoPath(logoSvg, fill, width, height, centerHexRadius, cs, stretch) {
-    const pathMatch = logoSvg.match(/<path[^>]*\bd="([^"]+)"/);
-    if (!pathMatch) return '';
-    const d = pathMatch[1];
-
-    let logoCx = 32.0;
-    let logoCy = 36.5;
-    let logoH = 70.0;
-    const vbMatch = logoSvg.match(/viewBox="([^"]+)"/);
-    if (vbMatch) {
-        const vb = vbMatch[1].trim().split(/[\s,]+/).map(Number);
-        if (vb.length === 4 && vb.every(Number.isFinite)) {
-            logoCx = vb[0] + vb[2] / 2;
-            logoCy = vb[1] + vb[3] / 2;
-            logoH = vb[3];
-        }
-    }
-
-    const hexDiameter = centerHexRadius * cs * 2;
-    const scale = hexDiameter / logoH;
-    const cx = width / 2;
-    const cy = height / 2;
-    const transform =
-        `translate(${cx - logoCx * scale},${cy - logoCy * scale * stretch})` +
-        ` scale(${scale},${scale * stretch})`;
-    return `<path class="logo" d="${d}" fill="${fill}" transform="${transform}"/>`;
-}
