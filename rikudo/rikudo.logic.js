@@ -157,6 +157,23 @@ export function numbering(board, edges) {
 }
 
 /**
+ * Fragments with orientation: when exactly one clue-consistent
+ * numbering exists, the chain is returned ascending (toward higher
+ * numbers) with determined=true; otherwise as-is with determined=false.
+ *
+ * @returns {Array<{ chain: string[], determined: boolean }>}
+ */
+export function orientedFragments(board, edges) {
+    return fragments(edges).map(chain => {
+        const feasible = feasibleNumberings(board, chain);
+        if (feasible.length === 1) {
+            return { chain: feasible[0].chain, determined: true };
+        }
+        return { chain, determined: false };
+    });
+}
+
+/**
  * Whether the edge a-b may be added.
  *
  * Requires adjacency, both endpoints with spare degree (< 2 edges,

@@ -79,6 +79,13 @@ describe('Rikudo page', () => {
         expect(textOf(keys[2])).toBe('3');
     });
 
+    it('determined fragments get an arrowhead at the ascending end; wins clear them', async () => {
+        await drawRun(0, 2); // anchored at the 1-clue -> determined
+        expect(document.querySelectorAll('#rikudo-board .frag-arrow').length).toBe(1);
+        await drawRun(2, solutionKeys().length - 1); // complete -> win hides arrows
+        expect(document.querySelectorAll('#rikudo-board .frag-arrow').length).toBe(0);
+    });
+
     it('completing the board out of order shows the win banner and wave', async () => {
         vi.useFakeTimers();
         const keys = solutionKeys();

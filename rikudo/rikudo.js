@@ -10,7 +10,7 @@ import { createPRNG, dateSeed } from '../core/prng.js';
 import { generateRikudo } from '../core/rikudo.js';
 import { axialToPixel, hexCorners } from '../core/hex-cell-grid.js';
 import {
-    createBoard, initialEdges, edgeId, numbering,
+    createBoard, initialEdges, edgeId, numbering, orientedFragments,
     addEdge, removeEdge, isWin, winOrder,
 } from './rikudo.logic.js';
 
@@ -112,6 +112,11 @@ export const Rikudo = {
         this.edgeLayer = document.createElementNS(NS, 'g');
         this.edgeLayer.setAttribute('class', 'edge-layer');
         svg.appendChild(this.edgeLayer);
+
+        // Arrowheads marking the ascending end of determined fragments
+        this.arrowLayer = document.createElementNS(NS, 'g');
+        this.arrowLayer.setAttribute('class', 'arrow-layer');
+        svg.appendChild(this.arrowLayer);
 
         document.getElementById('board-container').appendChild(svg);
         this.svg = svg;
@@ -248,6 +253,39 @@ export const Rikudo = {
         const won = isWin(this.board, this.edges);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
+
+        this._renderArrowheads(won);
+    },
+
+    /**
+     * An arrowhead marks the ascending end of every fragment whose
+     * direction the clues have pinned down; ambiguous fragments get
+     * none (their direction is genuinely unknown). Hidden on a win --
+     * the wave takes over.
+     */
+    _renderArrowheads(won) {
+        while (this.arrowLayer.firstChild) this.arrowLayer.firstChild.remove();
+        if (won) return;
+        for (const { chain, determined } of orientedFragments(this.board, this.edges)) {
+            if (!determined || chain.length < 2) continue;
+            const tip = this._centerOf(chain[chain.length - 1]);
+            const prev = this._centerOf(chain[chain.length - 2]);
+            const dx = tip.x - prev.x;
+            const dy = tip.y - prev.y;
+            const len = Math.hypot(dx, dy) || 1;
+            const ux = dx / len;
+            const uy = dy / len;
+            // Sits past the number badge, inside the end cell
+            const px = tip.x + ux * CELL_SIZE * 0.62;
+            const py = tip.y + uy * CELL_SIZE * 0.62;
+            const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+            const s = CELL_SIZE * 0.24;
+            const head = document.createElementNS(NS, 'path');
+            head.setAttribute('d', `M ${-s * 0.7} ${-s} L ${s} 0 L ${-s * 0.7} ${s} Z`);
+            head.setAttribute('class', 'frag-arrow');
+            head.setAttribute('transform', `translate(${px},${py}) rotate(${angle})`);
+            this.arrowLayer.appendChild(head);
+        }
     },
 
     _celebrate() {

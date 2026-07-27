@@ -94,6 +94,13 @@ h1 {
   cursor: pointer;
 }
 
+/* Arrowhead on the ascending end of direction-determined fragments */
+#rikudo-board .arrow-layer .frag-arrow {
+  fill: var(--color-player);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 #rikudo-board .hole {
   fill: var(--rikudo-cell);
   stroke: var(--color-maze);

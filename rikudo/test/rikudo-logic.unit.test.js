@@ -4,7 +4,8 @@ import { createPRNG } from '../../core/prng.js';
 import { generateRikudo } from '../../core/rikudo.js';
 import {
     createBoard, initialEdges, edgeId, fragments, feasibleNumberings,
-    numbering, canAddEdge, addEdge, removeEdge, isWin, winOrder,
+    numbering, orientedFragments, canAddEdge, addEdge, removeEdge,
+    isWin, winOrder,
 } from '../rikudo.logic.js';
 
 const puzzle = generateRikudo({ radius: 2, prng: createPRNG(7) });
@@ -141,6 +142,24 @@ describe('fragments / numbering', () => {
         expect(feasible.length).toBe(1);
         expect(feasible[0].base).toBe(1);
         expect(feasible[0].chain[0]).toBe(solutionKeys[0]);
+    });
+
+    it('orientedFragments: anchored runs are determined and ascend; clue-free runs are not', () => {
+        // Run from the 1-clue: direction pinned
+        let edges = linkRun(initialEdges(), 0, 2);
+        let frags = orientedFragments(board, edges);
+        expect(frags.length).toBe(1);
+        expect(frags[0].determined).toBe(true);
+        expect(frags[0].chain).toEqual(solutionKeys.slice(0, 3));
+
+        // Clue-free fragment: ambiguous
+        let i = 1;
+        while (i < solutionKeys.length - 2 &&
+            (board.clueByKey.has(solutionKeys[i]) || board.clueByKey.has(solutionKeys[i + 1]))) i++;
+        if (i < solutionKeys.length - 2) {
+            const loose = linkRun(initialEdges(), i, i + 1);
+            expect(orientedFragments(board, loose)[0].determined).toBe(false);
+        }
     });
 });
 
