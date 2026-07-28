@@ -55,7 +55,9 @@ describe('Property 2: PRNG choice returns array element', () => {
                 (arr, seed) => {
                     const prng = createPRNG(seed);
                     const result = prng.choice(arr);
-                    expect(arr).toContain(result);
+                    // SameValue semantics: toContain uses ===, which
+                    // rejects a correctly-returned NaN (NaN !== NaN)
+                    expect(arr.some(x => Object.is(x, result))).toBe(true);
                 }
             ),
             { numRuns: 100 }
