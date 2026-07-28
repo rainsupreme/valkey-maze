@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { createPRNG } from '../prng.js';
-import { buildHexCellGrid } from '../hex-cell-grid.js';
+import { buildHexCellGrid, hexDistance } from '../hex-cell-grid.js';
 import { generateSignposts, countSolutions, buildRays, directionBetween } from '../signposts.js';
 
 describe('directionBetween', () => {
@@ -105,6 +105,34 @@ describe('Property: Signposts solution validity', () => {
         fc.assert(
             fc.property(fc.integer({ min: 2, max: 3 }), fc.integer(), (radius, seed) => {
                 const puzzle = generateSignposts({ radius, prng: createPRNG(seed) });
+                const grid = buildHexCellGrid(radius, { centerHole: true });
+                const { rays } = buildRays(grid);
+                const arrowByKey = new Map(
+                    puzzle.arrows.filter(a => a.dir !== null).map(a => [`${a.q},${a.r}`, a.dir])
+                );
+                const clues = new Map(puzzle.clues.map(c => [`${c.q},${c.r}`, c.value]));
+                expect(countSolutions(rays, arrowByKey, clues, grid.cells.size)).toBe(1);
+            }),
+            { numRuns: 10 }
+        );
+    }, 30000);
+});
+
+describe('Property: Signposts corner endpoints', () => {
+    it('cornerEndpoints fixes the sequence in opposite corners; puzzle stays unique', () => {
+        fc.assert(
+            fc.property(fc.integer({ min: 2, max: 3 }), fc.integer(), (radius, seed) => {
+                const puzzle = generateSignposts({ radius, cornerEndpoints: true, prng: createPRNG(seed) });
+                const first = puzzle.solutionPath[0];
+                const last = puzzle.solutionPath[puzzle.solutionPath.length - 1];
+                // Both endpoints are corners (distance = radius) and
+                // opposite (coordinates sum to zero; avoids -0 vs 0
+                // mismatch under toBe's Object.is semantics)
+                expect(hexDistance(first[0], first[1])).toBe(radius);
+                expect(hexDistance(last[0], last[1])).toBe(radius);
+                expect(first[0] + last[0]).toBe(0);
+                expect(first[1] + last[1]).toBe(0);
+
                 const grid = buildHexCellGrid(radius, { centerHole: true });
                 const { rays } = buildRays(grid);
                 const arrowByKey = new Map(

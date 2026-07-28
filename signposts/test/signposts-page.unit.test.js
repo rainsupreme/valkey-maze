@@ -8,6 +8,11 @@ beforeEach(async () => {
         <div id="board-container"></div>
         <div id="win-banner" class="hidden"></div>
         <button id="reset-btn"></button>
+        <div id="difficulty-row">
+            <button data-difficulty="easy">Easy</button>
+            <button data-difficulty="medium">Medium</button>
+            <button data-difficulty="hard">Hard</button>
+        </div>
     `;
     vi.resetModules();
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false })));
@@ -170,5 +175,43 @@ describe('Signposts page', () => {
             .toBe(Signposts.puzzle.cells.length);
         expect(window.solution()).toBe(false);
         expect(document.querySelector('.solution-overlay')).toBeNull();
+    });
+
+    it('defaults to easy: radius-2 board with corner endpoints', () => {
+        expect(Signposts.difficulty).toBe('easy');
+        expect(Signposts.puzzle.radius).toBe(2);
+        expect(Signposts.puzzle.cells.length).toBe(18);
+        expect(document.querySelector('[data-difficulty="easy"]').classList.contains('active')).toBe(true);
+    });
+
+    it('switching difficulty rebuilds the board and persists the choice', async () => {
+        Signposts.setDifficulty('hard');
+        expect(Signposts.puzzle.radius).toBe(3);
+        expect(document.querySelectorAll('#signposts-board .cell').length).toBe(36);
+        expect(document.querySelector('[data-difficulty="hard"]').classList.contains('active')).toBe(true);
+        // Only one board in the DOM after the rebuild
+        expect(document.querySelectorAll('#signposts-board').length).toBe(1);
+        // Choice survives a reload
+        vi.resetModules();
+        const mod = await import('../signposts.js');
+        expect(mod.Signposts.difficulty).toBe('hard');
+    });
+
+    it('progress is saved per difficulty', () => {
+        const keys = solutionKeys();
+        Signposts._tap(keys[0]);
+        Signposts._tap(keys[1]);           // one link on easy
+        expect(Signposts.links.size).toBe(1);
+        Signposts.setDifficulty('medium'); // fresh board, no links
+        expect(Signposts.links.size).toBe(0);
+        Signposts.setDifficulty('easy');   // easy progress restored
+        expect(Signposts.links.size).toBe(1);
+    });
+
+    it('easy endpoints sit in opposite corners', () => {
+        const first = Signposts.puzzle.solutionPath[0];
+        const last = Signposts.puzzle.solutionPath[Signposts.puzzle.solutionPath.length - 1];
+        expect(first[0] + last[0]).toBe(0);
+        expect(first[1] + last[1]).toBe(0);
     });
 });

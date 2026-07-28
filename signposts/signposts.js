@@ -17,8 +17,14 @@ import {
 
 const NS = 'http://www.w3.org/2000/svg';
 const CELL_SIZE = 34;
-const RADIUS = 3;
 const STORAGE_KEY = 'signposts-state';
+
+export const DIFFICULTIES = {
+    easy: { radius: 2, cornerEndpoints: true },
+    medium: { radius: 3, cornerEndpoints: true },
+    hard: { radius: 3, cornerEndpoints: false },
+};
+const DEFAULT_DIFFICULTY = 'easy';
 
 export const Signposts = {
     puzzle: null,
@@ -26,6 +32,7 @@ export const Signposts = {
     links: null,
     selected: null,
     dateKey: '',
+    difficulty: DEFAULT_DIFFICULTY,
 
     svg: null,
     cellElements: new Map(),
@@ -39,25 +46,71 @@ export const Signposts = {
     init() {
         const today = new Date();
         this.dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-        this.puzzle = generateSignposts({ radius: RADIUS, prng: createPRNG(dateSeed(today)) });
-        this.board = createBoard(this.puzzle);
-        this.links = this._restore() || initialLinks();
+        this.difficulty = this._restoreDifficulty();
+        this._setupPuzzle();
 
-        this._buildBoard();
-        this.svg.addEventListener('pointerdown', (e) => {
-            const key = e.target.dataset && e.target.dataset.key;
-            this._tap(key || null);
-            if (key) e.preventDefault();
-        });
         document.getElementById('reset-btn').addEventListener('click', () => {
             this.links = initialLinks();
             this.selected = null;
             this._save();
             this.render();
         });
-        this.render();
+        document.getElementById('difficulty-row').addEventListener('click', (e) => {
+            const d = e.target.dataset && e.target.dataset.difficulty;
+            if (d && d !== this.difficulty) this.setDifficulty(d);
+        });
 
         window.solution = () => this.toggleSolution();
+    },
+
+    /** (Re)generate the current difficulty's daily puzzle and board. */
+    _setupPuzzle() {
+        const today = new Date();
+        this.puzzle = generateSignposts({
+            ...DIFFICULTIES[this.difficulty],
+            prng: createPRNG(dateSeed(today)),
+        });
+        this.board = createBoard(this.puzzle);
+        this.links = this._restore() || initialLinks();
+        this.selected = null;
+
+        if (this.svg) {
+            this._clearWinWave();
+            this.svg.remove();
+            this.solutionLine = null;
+            this.logoElement = null;
+            this.cellElements.clear();
+            this.numberElements.clear();
+            this.arrowElements.clear();
+            this.dotElements.clear();
+        }
+        this._buildBoard();
+        this.svg.addEventListener('pointerdown', (e) => {
+            const key = e.target.dataset && e.target.dataset.key;
+            this._tap(key || null);
+            if (key) e.preventDefault();
+        });
+
+        for (const btn of document.querySelectorAll('#difficulty-row button')) {
+            btn.classList.toggle('active', btn.dataset.difficulty === this.difficulty);
+        }
+        this.render();
+    },
+
+    setDifficulty(difficulty) {
+        if (!DIFFICULTIES[difficulty]) return;
+        this.difficulty = difficulty;
+        try { localStorage.setItem(`${STORAGE_KEY}-difficulty`, difficulty); } catch { /* ok */ }
+        this._setupPuzzle();
+    },
+
+    _restoreDifficulty() {
+        try {
+            const d = localStorage.getItem(`${STORAGE_KEY}-difficulty`);
+            return DIFFICULTIES[d] ? d : DEFAULT_DIFFICULTY;
+        } catch {
+            return DEFAULT_DIFFICULTY;
+        }
     },
 
     // ── Interaction ─────────────────────────────────────────
@@ -106,7 +159,7 @@ export const Signposts = {
     },
 
     _buildBoard() {
-        const extent = (RADIUS + 1) * 2 * CELL_SIZE;
+        const extent = (this.puzzle.radius + 1) * 2 * CELL_SIZE;
         const width = extent * Math.sqrt(3);
         const height = extent * 1.74;
         this._ox = width / 2;
@@ -296,7 +349,7 @@ export const Signposts = {
 
     _save() {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            localStorage.setItem(`${STORAGE_KEY}-${this.difficulty}`, JSON.stringify({
                 dateKey: this.dateKey,
                 links: [...this.links],
             }));
@@ -305,7 +358,7 @@ export const Signposts = {
 
     _restore() {
         try {
-            const raw = localStorage.getItem(STORAGE_KEY);
+            const raw = localStorage.getItem(`${STORAGE_KEY}-${this.difficulty}`);
             if (!raw) return null;
             const saved = JSON.parse(raw);
             if (saved.dateKey !== this.dateKey) return null;
