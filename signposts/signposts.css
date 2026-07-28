@@ -193,6 +193,37 @@ h1 {
   margin-top: 0.75rem;
 }
 
+/* ── Difficulty selector ── */
+
+.difficulty-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.difficulty-row button {
+  padding: 0.3rem 0.8rem;
+  background: var(--color-panel-bg);
+  color: var(--color-text-muted);
+  border: 1px solid #444;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.difficulty-row button:hover {
+  border-color: var(--color-maze);
+}
+
+.difficulty-row button.active {
+  background: #1e2a50;
+  color: var(--color-player);
+  border-color: var(--color-maze);
+  font-weight: bold;
+}
+
 #reset-btn {
   padding: 0.3rem 0.6rem;
   background: var(--color-danger);

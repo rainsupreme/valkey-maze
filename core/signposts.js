@@ -79,9 +79,14 @@ export function directionBetween(aKey, bKey) {
 
 /**
  * Random Hamiltonian path through the ray-visibility digraph.
+ *
+ * When `startKey`/`endKey` are given the path is constrained to those
+ * endpoints: the search starts at startKey and refuses to enter
+ * endKey until it is the final cell.
+ *
  * @returns {string[]|null}
  */
-function sequencePath(cellKeys, successors, prng) {
+function sequencePath(cellKeys, successors, prng, { startKey = null, endKey = null } = {}) {
     const total = cellKeys.length;
     let budget = 0;
 
@@ -98,7 +103,8 @@ function sequencePath(cellKeys, successors, prng) {
         if (path.length === total) return true;
         if (--budget <= 0) return false;
         const current = path[path.length - 1];
-        const candidates = shuffled((successors.get(current) || []).filter(k => !visited.has(k)));
+        const candidates = shuffled((successors.get(current) || []).filter(k =>
+            !visited.has(k) && (k !== endKey || path.length === total - 1)));
         // Prefer candidates with few onward moves (Warnsdorff)
         candidates.sort((a, b) =>
             (successors.get(a) || []).filter(k => !visited.has(k)).length -
@@ -115,8 +121,12 @@ function sequencePath(cellKeys, successors, prng) {
     }
 
     // Each restart gets its own budget slice so a pathological start
-    // cell cannot starve the remaining attempts.
-    for (const start of shuffled(cellKeys)) {
+    // cell cannot starve the remaining attempts. With a fixed start,
+    // the attempts re-run from it with fresh shuffles.
+    const starts = startKey !== null
+        ? Array.from({ length: 12 }, () => startKey)
+        : shuffled(cellKeys);
+    for (const start of starts) {
         budget = PATH_NODE_BUDGET;
         const path = [start];
         const visited = new Set([start]);
@@ -179,6 +189,9 @@ export function countSolutions(rays, arrowByKey, clues, total, cap = 2) {
  *
  * @param {object} params
  * @param {number} [params.radius=3] - board radius (3 = 36 cells)
+ * @param {boolean} [params.cornerEndpoints=false] - fix the sequence
+ *   endpoints in two opposite corners of the hex board (an easier
+ *   read: both anchors sit at known, visually obvious cells)
  * @param {{ next(): number, choice(arr: any[]): any }} params.prng
  * @returns {{ radius: number, holeCell: [number, number],
  *             cells: Array<{q: number, r: number}>,
@@ -189,7 +202,7 @@ export function countSolutions(rays, arrowByKey, clues, total, cap = 2) {
  *   not spatial adjacency). arrows.dir is null only for the final
  *   cell (the goal). clues always include 1 and the highest number.
  */
-export function generateSignposts({ radius = 3, prng }) {
+export function generateSignposts({ radius = 3, cornerEndpoints = false, prng }) {
     if (radius < 2) {
         throw new Error(`Invalid radius: ${radius}. Must be at least 2.`);
     }
@@ -199,7 +212,19 @@ export function generateSignposts({ radius = 3, prng }) {
     const total = cellKeys.length;
     const { rays, successors } = buildRays(grid);
 
-    const path = sequencePath(cellKeys, successors, prng);
+    let endpoints = {};
+    if (cornerEndpoints) {
+        // A random opposite-corner pair: corners sit at distance
+        // `radius` along the six axial directions; the opposite corner
+        // is the negation.
+        const [cq, cr] = prng.choice(HEX_DIRECTIONS);
+        endpoints = {
+            startKey: `${cq * radius},${cr * radius}`,
+            endKey: `${-cq * radius},${-cr * radius}`,
+        };
+    }
+
+    const path = sequencePath(cellKeys, successors, prng, endpoints);
     if (path === null) {
         throw new Error('Failed to find a signpost sequence within budget');
     }
