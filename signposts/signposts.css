@@ -168,20 +168,29 @@ h1 {
   pointer-events: none;
 }
 
-/* Win wave: path cells light up periwinkle in sequence (delay set in JS) */
+/* Win wave: cells light up periwinkle in sequence (delay set in JS) */
 #signposts-board .cell.win-lit {
   fill: var(--color-maze);
-  transition: fill 0.3s ease;
+  transition: fill 0.6s ease;
 }
 
 #signposts-board .num.win-lit {
   fill: #000;
-  transition: fill 0.3s ease;
+  transition: fill 0.6s ease;
+}
+
+/* Arrows flip white with their cell -- readable on the periwinkle
+   field even when previously dimmed as used */
+#signposts-board .arrow.win-lit,
+#signposts-board .arrow.used.win-lit {
+  fill: #fff;
+  opacity: 0.9;
+  transition: fill 0.6s ease, opacity 0.6s ease;
 }
 
 #signposts-board .logo.win-lit {
   fill: var(--color-player);
-  transition: fill 0.4s ease;
+  transition: fill 0.8s ease;
 }
 
 /* ── Controls ── */

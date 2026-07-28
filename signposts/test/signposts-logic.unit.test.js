@@ -152,14 +152,31 @@ describe('isWin / winOrder', () => {
     });
 
     it('solving out of order wins too', () => {
-        // Build back half first, then front half, then join
+        // Build back half first, then front half. The joining link is
+        // never needed: once both fragments are anchored and every
+        // cell's number is forced, the puzzle is solved.
         const n = solutionKeys.length;
         const mid = Math.floor(n / 2);
         let links = linkRun(initialLinks(), mid, n - 1);
-        expect(isWin(board, links)).toBe(false);
+        expect(isWin(board, links)).toBe(false); // front cells unnumbered
         links = linkRun(links, 0, mid - 1);
-        expect(isWin(board, links)).toBe(false);
-        links = linkRun(links, mid - 1, mid); // the joining link
+        expect(isWin(board, links)).toBe(true);  // all numbers forced
+        expect(winOrder(board, links)).toEqual(solutionKeys);
+        // Drawing the joining link anyway keeps the win
+        links = linkRun(links, mid - 1, mid);
+        expect(isWin(board, links)).toBe(true);
+        expect(winOrder(board, links)).toEqual(solutionKeys);
+    });
+
+    it('wins one link early: the last link is never required', () => {
+        // All links except one in the middle -- both fragments stay
+        // anchored (1-clue in front, N-clue in back), so every number
+        // is determined without the final connection.
+        const n = solutionKeys.length;
+        const skip = Math.floor(n / 3);
+        let links = linkRun(initialLinks(), 0, skip);
+        links = linkRun(links, skip + 1, n - 1);
+        expect(links.size).toBe(n - 2);
         expect(isWin(board, links)).toBe(true);
         expect(winOrder(board, links)).toEqual(solutionKeys);
     });

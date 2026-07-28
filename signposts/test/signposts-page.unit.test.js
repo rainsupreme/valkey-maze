@@ -122,14 +122,29 @@ describe('Signposts page', () => {
         expect(document.querySelectorAll('#signposts-board .num.relative-label').length).toBe(0);
     });
 
-    it('completing all links (in any order) shows the win banner', () => {
+    it('the win fires once all numbers are forced -- before the last link', () => {
         const keys = solutionKeys();
         const n = keys.length;
         const mid = Math.floor(n / 2);
         linkSolution(mid, n - 1);   // back half first
         expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(true);
-        linkSolution(0, mid);       // then the front, joining at mid
+        linkSolution(0, mid - 1);   // front half; joining link never drawn
+        expect(Signposts.links.size).toBe(n - 2);
         expect(document.getElementById('win-banner').classList.contains('hidden')).toBe(false);
+    });
+
+    it('win wave flips arrows white and hides the dots', () => {
+        vi.useFakeTimers();
+        const keys = solutionKeys();
+        linkSolution(0, keys.length - 1);
+        vi.advanceTimersByTime(keys.length * 90 + 1000);
+        // Every arrow-bearing cell's arrow is win-lit (goal cell has none)
+        for (const [, arrow] of Signposts.arrowElements) {
+            expect(arrow.classList.contains('win-lit')).toBe(true);
+        }
+        expect(document.querySelectorAll('#signposts-board .incoming-dot:not(.hidden)').length)
+            .toBe(0);
+        vi.useRealTimers();
     });
 
     it('reset clears links, selection, and the win state', () => {

@@ -18,6 +18,7 @@ import {
 const NS = 'http://www.w3.org/2000/svg';
 const CELL_SIZE = 34;
 const STORAGE_KEY = 'signposts-state';
+const WIN_WAVE_STEP_MS = 90; // half-speed sweep
 
 export const DIFFICULTIES = {
     easy: { radius: 2, cornerEndpoints: true },
@@ -292,11 +293,11 @@ export const Signposts = {
         for (const [key, arrow] of this.arrowElements) {
             arrow.classList.toggle('used', this.links.has(key));
         }
+        const won = isWin(this.board, this.links);
         for (const [key, dot] of this.dotElements) {
-            dot.classList.toggle('hidden', incoming.has(key));
+            dot.classList.toggle('hidden', incoming.has(key) || won);
         }
 
-        const won = isWin(this.board, this.links);
         if (!won && this.svg) this._clearWinWave();
         document.getElementById('win-banner').classList.toggle('hidden', !won);
     },
@@ -308,12 +309,16 @@ export const Signposts = {
             this._winTimers.push(setTimeout(() => {
                 this.cellElements.get(key).classList.add('win-lit');
                 this.numberElements.get(key).classList.add('win-lit');
-            }, i * 45));
+                // Arrows flip white with their cell so they stay
+                // readable on the periwinkle field
+                const arrow = this.arrowElements.get(key);
+                if (arrow) arrow.classList.add('win-lit');
+            }, i * WIN_WAVE_STEP_MS));
         });
         if (this.logoElement) {
             this._winTimers.push(setTimeout(() => {
                 this.logoElement.classList.add('win-lit');
-            }, order.length * 45));
+            }, order.length * WIN_WAVE_STEP_MS));
         }
     },
 
