@@ -177,30 +177,38 @@ export function removeLink(links, from) {
 }
 
 /**
- * Solved: one chain covers every cell, numbered 1..N from the cell
- * holding clue 1. Link-time validation keeps clues consistent, so a
- * full-length chain headed by the 1-clue is necessarily correct.
+ * Solved: every cell's number is determined and the induced sequence
+ * is the solution -- a bijection onto 1..N in which each consecutive
+ * pair respects the arrows. Combined with clue consistency (inherent
+ * in numbering()) and the unique-solution guarantee, such a numbering
+ * IS the solution, even when some links (like the final one) were
+ * never drawn: the numbers being forced is what matters.
  */
 export function isWin(board, links) {
-    if (links.size !== board.total - 1) return false;
     const { numberByKey } = numbering(board, links);
-    if (numberByKey.get(board.startKey) !== 1) return false;
-    let count = 0;
-    for (const num of numberByKey.values()) {
-        if (num >= 1 && num <= board.total) count++;
+    if (numberByKey.size !== board.total) return false;
+
+    const keyByNumber = new Array(board.total + 1).fill(null);
+    for (const [key, num] of numberByKey) {
+        if (num < 1 || num > board.total || keyByNumber[num] !== null) return false;
+        keyByNumber[num] = key;
     }
-    return count === board.total && new Set(numberByKey.values()).size === board.total;
+    for (let num = 1; num < board.total; num++) {
+        const cur = keyByNumber[num];
+        const dir = board.arrowByKey.get(cur);
+        if (dir === null || dir === undefined) return false;
+        if (!board.rays.get(cur)[dir].includes(keyByNumber[num + 1])) return false;
+    }
+    return true;
 }
 
 /**
- * The winning chain in order 1..N (for the win wave).
+ * The winning sequence in order 1..N (for the win wave).
  * Only meaningful when isWin() is true.
  */
 export function winOrder(board, links) {
-    const chain = [board.startKey];
-    for (let cur = board.startKey; links.has(cur); ) {
-        cur = links.get(cur);
-        chain.push(cur);
-    }
-    return chain;
+    const { numberByKey } = numbering(board, links);
+    const order = new Array(board.total);
+    for (const [key, num] of numberByKey) order[num - 1] = key;
+    return order;
 }
